@@ -1,0 +1,3735 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>لعبة شوتر - منظور الشخص الأول</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: 'Tahoma', 'Arial', sans-serif;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none; -webkit-touch-callout: none;
+    overscroll-behavior: none;
+  }
+  #game-canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  #ui-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+  /* === Crosshair === */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px; height: 28px; pointer-events: none; z-index: 12;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255,255,255,0.85);
+    box-shadow: 0 0 3px rgba(0,0,0,0.9);
+  }
+  #crosshair::before { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }
+  #crosshair::after { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); }
+  #crosshair .dot {
+    position: absolute; top: 50%; left: 50%; width: 3px; height: 3px;
+    background: #ff4040; border-radius: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 0 3px rgba(0,0,0,0.9);
+  }
+
+  /* === HUD === */
+  #hud {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; gap: 8px;
+    color: #fff; text-shadow: 0 0 4px #000; font-size: 13px;
+    z-index: 15;
+  }
+  .hud-box {
+    background: rgba(0,0,0,0.55); padding: 8px 14px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.18);
+    min-width: 90px;
+  }
+  .hud-box.center { text-align: center; }
+  .hud-box.left { text-align: left; }
+  .hud-label { font-size: 10px; opacity: 0.7; margin-bottom: 3px; letter-spacing: 1px; }
+  .hud-value { font-size: 18px; font-weight: bold; }
+  #health-bar {
+    width: 110px; height: 6px; background: rgba(255,0,0,0.3);
+    border-radius: 3px; overflow: hidden; margin-top: 5px;
+  }
+  #health-fill {
+    height: 100%; background: linear-gradient(90deg, #ff3030, #30ff60);
+    width: 100%; transition: width 0.3s;
+  }
+
+  /* === Look area === */
+  #look-area {
+    position: absolute; inset: 0;
+    pointer-events: auto; touch-action: none; z-index: 5;
+  }
+
+  /* === Joystick === */
+  #joystick {
+    position: absolute; bottom: 40px; left: 30px;
+    width: 130px; height: 130px;
+    pointer-events: auto; touch-action: none; z-index: 20;
+  }
+  #joystick-base {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.35);
+  }
+  #joystick-knob {
+    position: absolute; top: 50%; left: 50%;
+    width: 58px; height: 58px; border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    border: 2px solid rgba(255,255,255,0.85);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+
+  /* === Fire button === */
+  #fire-btn {
+    position: absolute; bottom: 50px; right: 30px;
+    width: 105px; height: 105px; border-radius: 50%;
+    background: rgba(255, 60, 60, 0.5);
+    border: 3px solid rgba(255, 130, 130, 1);
+    color: #fff; font-size: 15px; font-weight: bold;
+    pointer-events: auto; touch-action: none; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(255,60,60,0.5);
+  }
+  #fire-btn:active, #fire-btn.firing {
+    background: rgba(255, 120, 120, 0.9);
+    transform: scale(0.94);
+  }
+
+  /* === Reload button === */
+  #reload-btn {
+    position: absolute; bottom: 165px; right: 50px;
+    width: 60px; height: 60px; border-radius: 50%;
+    background: rgba(60, 120, 255, 0.5);
+    border: 2px solid rgba(120, 170, 255, 1);
+    color: #fff; font-size: 11px; font-weight: bold;
+    pointer-events: auto; z-index: 20;
+  }
+  #reload-btn:active { transform: scale(0.93); }
+
+  /* === Jump button === */
+  #jump-btn {
+    position: absolute; bottom: 90px; right: 155px;
+    width: 68px; height: 68px; border-radius: 50%;
+    background: rgba(60, 200, 100, 0.5);
+    border: 2px solid rgba(120, 230, 140, 1);
+    color: #fff; font-size: 12px; font-weight: bold;
+    pointer-events: auto; z-index: 20;
+  }
+  #jump-btn:active { transform: scale(0.93); }
+
+  /* === Hit marker === */
+  #hit-marker {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px; height: 32px; pointer-events: none;
+    opacity: 0; z-index: 13;
+  }
+  #hit-marker.show { animation: hitFlash 0.35s; }
+  @keyframes hitFlash {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1.6); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
+  #hit-marker::before, #hit-marker::after {
+    content: ''; position: absolute; background: #ff3030;
+    box-shadow: 0 0 3px rgba(0,0,0,0.8);
+  }
+  #hit-marker::before { top: 50%; left: 0; right: 0; height: 3px; transform: translateY(-50%) rotate(45deg); }
+  #hit-marker::after { left: 50%; top: 0; bottom: 0; width: 3px; transform: translateX(-50%) rotate(45deg); }
+
+  /* === Damage flash === */
+  #damage-flash {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(255,0,0,0.55) 100%);
+    pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 14;
+  }
+  #damage-flash.show { opacity: 1; }
+
+  /* === Muzzle flash overlay === */
+  #muzzle-flash {
+    position: absolute; bottom: 28%; right: 22%;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,220,100,0.9), transparent 70%);
+    pointer-events: none; opacity: 0; z-index: 11;
+  }
+  #muzzle-flash.show { animation: flashAnim 0.09s; }
+  @keyframes flashAnim { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* === Pause button === */
+  #pause-btn {
+    position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+    padding: 7px 18px; background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; font-size: 12px; border-radius: 20px;
+    pointer-events: auto; z-index: 16;
+  }
+
+  /* === واجهة البداية النارية (Zaza War) === */
+  #start-screen {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center bottom, #4a0a0a 0%, #1a0505 50%, #000 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 100; pointer-events: auto;
+    padding: 20px; overflow-y: auto;
+  }
+  /* طبقة النيران المتحركة في الخلفية */
+  #start-screen::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at 20% 90%, rgba(255, 80, 0, 0.5) 0%, transparent 25%),
+      radial-gradient(circle at 50% 95%, rgba(255, 150, 0, 0.6) 0%, transparent 30%),
+      radial-gradient(circle at 80% 85%, rgba(255, 60, 0, 0.5) 0%, transparent 25%),
+      radial-gradient(circle at 30% 80%, rgba(255, 100, 0, 0.4) 0%, transparent 20%),
+      radial-gradient(circle at 70% 90%, rgba(255, 200, 50, 0.5) 0%, transparent 22%);
+    animation: flicker 1.5s ease-in-out infinite alternate;
+  }
+  @keyframes flicker {
+    0% { opacity: 0.85; transform: scaleY(1); }
+    50% { opacity: 1; transform: scaleY(1.05); }
+    100% { opacity: 0.9; transform: scaleY(0.98); }
+  }
+  /* شعارات الشفاء في الأعلى */
+  #start-screen::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(255, 200, 100, 0.15) 0%, transparent 15%),
+      radial-gradient(circle at 90% 20%, rgba(255, 150, 50, 0.1) 0%, transparent 20%);
+  }
+  #start-screen > * { position: relative; z-index: 1; }
+
+  #zaza-title {
+    font-size: 64px; font-weight: 900; letter-spacing: 4px;
+    background: linear-gradient(180deg, #fff5a0 0%, #ffaa00 30%, #ff4400 70%, #cc0000 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow:
+      0 0 30px rgba(255, 100, 0, 0.9),
+      0 0 60px rgba(255, 80, 0, 0.6),
+      0 0 90px rgba(255, 50, 0, 0.4);
+    filter: drop-shadow(0 4px 12px rgba(255, 80, 0, 0.7));
+    margin-bottom: 8px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 12px rgba(255, 80, 0, 0.7)); }
+    50% { transform: scale(1.03); filter: drop-shadow(0 6px 18px rgba(255, 120, 0, 0.9)); }
+  }
+  #zaza-subtitle {
+    font-size: 14px; letter-spacing: 8px; opacity: 0.7;
+    color: #ffaa00; margin-bottom: 40px; text-transform: uppercase;
+  }
+  #play-btn {
+    padding: 20px 60px;
+    background: linear-gradient(180deg, #ff8800 0%, #ff4400 50%, #cc0000 100%);
+    border: 3px solid #ffcc00;
+    border-radius: 50px;
+    color: #fff; font-size: 24px; font-weight: 900;
+    letter-spacing: 4px; text-transform: uppercase;
+    cursor: pointer; pointer-events: auto;
+    box-shadow:
+      0 0 30px rgba(255, 100, 0, 0.8),
+      0 0 60px rgba(255, 80, 0, 0.5),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.4);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  #play-btn:active {
+    transform: scale(0.95);
+    box-shadow:
+      0 0 20px rgba(255, 100, 0, 0.6),
+      0 0 40px rgba(255, 80, 0, 0.3),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+  }
+  #version-tag {
+    position: absolute; bottom: 20px; left: 20px;
+    font-size: 11px; color: #ffaa00; opacity: 0.6; letter-spacing: 2px;
+  }
+
+  /* === واجهة اختيار النمط (أفقية) === */
+  #mode-screen {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, #1a0510 0%, #000 100%);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 100; pointer-events: auto;
+    padding: 20px; overflow-y: auto;
+  }
+  #mode-screen.show { display: flex; }
+  #mode-screen h2 {
+    font-size: 28px; margin-bottom: 30px; letter-spacing: 3px;
+    background: linear-gradient(180deg, #ffcc00, #ff4400);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 10px rgba(255, 100, 0, 0.5));
+    text-align: center;
+  }
+  /* صف البطاقات الأفقي */
+  .modes-row {
+    display: flex; flex-direction: row; gap: 14px;
+    justify-content: center; align-items: stretch;
+    flex-wrap: wrap; max-width: 720px; margin-bottom: 24px;
+  }
+  .mode-card {
+    flex: 1 1 200px; min-width: 180px; max-width: 220px;
+    padding: 24px 16px;
+    background: linear-gradient(135deg, rgba(255, 80, 0, 0.15), rgba(120, 0, 0, 0.3));
+    border: 2px solid rgba(255, 150, 0, 0.5);
+    border-radius: 16px;
+    cursor: pointer; pointer-events: auto;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(255, 80, 0, 0.2);
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: space-between; min-height: 200px;
+  }
+  .mode-card:active {
+    transform: scale(0.97);
+    border-color: #ffcc00;
+    box-shadow: 0 4px 30px rgba(255, 150, 0, 0.5);
+  }
+  .mode-card .icon {
+    font-size: 48px; margin-bottom: 8px; display: block;
+  }
+  .mode-card .title {
+    font-size: 18px; font-weight: 900; color: #ffcc00;
+    margin-bottom: 6px; letter-spacing: 1px;
+  }
+  .mode-card .desc {
+    font-size: 11px; opacity: 0.8; line-height: 1.5;
+    margin-top: 4px;
+  }
+  .mode-card.locked {
+    opacity: 0.55; cursor: not-allowed;
+    background: linear-gradient(135deg, rgba(80, 80, 80, 0.3), rgba(40, 40, 40, 0.5));
+    border-color: rgba(150, 150, 150, 0.4);
+  }
+  .mode-card.locked:active { transform: none; }
+  .lock-badge {
+    display: inline-block; padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.5); border-radius: 12px;
+    font-size: 11px; color: #888; margin-top: 8px;
+    border: 1px solid rgba(150, 150, 150, 0.3);
+  }
+  #back-btn {
+    margin-top: 20px; padding: 12px 30px;
+    background: transparent;
+    border: 1px solid rgba(255, 150, 0, 0.5);
+    border-radius: 25px;
+    color: #ffaa00; font-size: 14px; font-weight: bold;
+    cursor: pointer; pointer-events: auto;
+  }
+  #back-btn:active { transform: scale(0.95); }
+
+  /* === شاشة إعدادات البوتات === */
+  #setup-screen {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, #1a0510 0%, #000 100%);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 100; pointer-events: auto;
+    padding: 20px; overflow-y: auto;
+  }
+  #setup-screen.show { display: flex; }
+  #setup-screen h2 {
+    font-size: 22px; margin-bottom: 24px; letter-spacing: 2px;
+    color: #ffcc00; text-align: center;
+  }
+  .setup-section {
+    width: 100%; max-width: 380px; margin-bottom: 20px;
+    text-align: center;
+  }
+  .setup-label {
+    font-size: 13px; color: #aaa; letter-spacing: 1px; margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .option-row {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  }
+  .option-btn {
+    padding: 12px 18px;
+    background: rgba(60, 30, 30, 0.6);
+    border: 2px solid rgba(150, 80, 80, 0.4);
+    border-radius: 10px;
+    color: #fff; font-size: 14px; font-weight: bold;
+    cursor: pointer; pointer-events: auto;
+    transition: all 0.15s;
+    min-width: 70px;
+  }
+  .option-btn.selected {
+    background: linear-gradient(135deg, #ff6600, #cc0000);
+    border-color: #ffcc00;
+    box-shadow: 0 0 15px rgba(255, 100, 0, 0.6);
+  }
+  .option-btn:active { transform: scale(0.95); }
+  .difficulty-easy.selected { background: linear-gradient(135deg, #44aa44, #226622); border-color: #88dd88; box-shadow: 0 0 15px rgba(80, 200, 80, 0.5); }
+  .difficulty-medium.selected { background: linear-gradient(135deg, #cc8800, #884400); border-color: #ffcc00; box-shadow: 0 0 15px rgba(255, 200, 0, 0.5); }
+  .difficulty-hard.selected { background: linear-gradient(135deg, #cc0000, #660000); border-color: #ff4444; box-shadow: 0 0 15px rgba(255, 60, 60, 0.6); }
+  #play-game-btn {
+    margin-top: 16px; padding: 16px 50px;
+    background: linear-gradient(180deg, #ff8800 0%, #ff4400 50%, #cc0000 100%);
+    border: 3px solid #ffcc00;
+    border-radius: 30px;
+    color: #fff; font-size: 20px; font-weight: 900;
+    letter-spacing: 3px; cursor: pointer; pointer-events: auto;
+    box-shadow: 0 0 25px rgba(255, 100, 0, 0.6);
+  }
+  #play-game-btn:active { transform: scale(0.95); }
+
+  /* === شاشة التحميل === */
+  #loading-screen {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, #1a0510 0%, #000 100%);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 200; pointer-events: auto;
+  }
+  #loading-screen.show { display: flex; }
+  #loading-text {
+    font-size: 20px; color: #ffcc00; margin-bottom: 24px; letter-spacing: 2px;
+  }
+  .loading-bar-container {
+    width: 280px; height: 14px;
+    background: rgba(60, 30, 30, 0.8);
+    border: 2px solid rgba(255, 150, 0, 0.5);
+    border-radius: 10px; overflow: hidden;
+  }
+  #loading-bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ff4400, #ffcc00);
+    transition: width 0.1s linear;
+    box-shadow: 0 0 10px rgba(255, 150, 0, 0.8);
+  }
+  #loading-percent {
+    font-size: 14px; color: #aaa; margin-top: 12px;
+  }
+
+  /* === واجهة إنشاء/الانضمام لغرفة الإنترنت === */
+  #room-modal {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 150; pointer-events: auto;
+    padding: 20px;
+  }
+  #room-modal.show { display: flex; }
+  #room-modal h3 {
+    font-size: 22px; margin-bottom: 24px;
+    background: linear-gradient(180deg, #ffcc00, #ff4400);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+  }
+  .room-section {
+    background: linear-gradient(135deg, rgba(255, 80, 0, 0.15), rgba(120, 0, 0, 0.3));
+    border: 2px solid rgba(255, 150, 0, 0.5);
+    border-radius: 14px;
+    padding: 18px; margin-bottom: 14px;
+    width: 100%; max-width: 320px;
+    text-align: center;
+  }
+  .room-section .label {
+    font-size: 13px; color: #ffcc88; margin-bottom: 10px; letter-spacing: 1px;
+  }
+  .room-input {
+    width: 100%; padding: 12px 14px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 150, 0, 0.4);
+    border-radius: 8px;
+    color: #fff; font-size: 16px;
+    text-align: center; letter-spacing: 2px;
+    margin-bottom: 10px;
+    font-family: monospace;
+  }
+  .room-input:focus { outline: none; border-color: #ffcc00; }
+  .room-input::placeholder { color: #666; letter-spacing: 1px; }
+  .room-btn {
+    padding: 12px 24px;
+    background: linear-gradient(180deg, #ff8800, #cc0000);
+    border: 2px solid #ffcc00;
+    border-radius: 20px;
+    color: #fff; font-size: 15px; font-weight: bold;
+    cursor: pointer;
+  }
+  .room-btn:active { transform: scale(0.95); }
+  #room-code-display {
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px dashed rgba(255, 200, 100, 0.5);
+    border-radius: 8px;
+    padding: 14px; margin: 10px 0;
+    font-family: monospace; font-size: 24px; letter-spacing: 4px;
+    color: #ffcc00;
+  }
+  #room-status {
+    font-size: 13px; color: #aaa; margin-top: 8px;
+    min-height: 18px;
+  }
+  #room-close-btn {
+    margin-top: 14px; padding: 10px 22px;
+    background: transparent;
+    border: 1px solid rgba(255, 150, 0, 0.5);
+    border-radius: 18px;
+    color: #ffaa00; font-size: 13px; cursor: pointer;
+  }
+
+  /* === واجهة اللعب الجماعي (نقاط الفريق في الأعلى + صحة اللاعب) === */
+  #team-ui {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    display: none; gap: 24px; align-items: center;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.6));
+    border-bottom: 2px solid rgba(255, 200, 100, 0.4);
+    padding: 8px 24px; border-radius: 0 0 14px 14px;
+    z-index: 25; pointer-events: none;
+    min-width: 280px;
+    justify-content: center;
+  }
+  #team-ui.show { display: flex; }
+  .team-block {
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 80px;
+  }
+  .team-label {
+    font-size: 10px; opacity: 0.7; letter-spacing: 1px; margin-bottom: 2px;
+  }
+  .team-label.blue { color: #66bbff; }
+  .team-label.red { color: #ff8866; }
+  .team-score {
+    font-size: 28px; font-weight: 900; line-height: 1;
+  }
+  .team-score.blue { color: #44aaff; text-shadow: 0 0 10px rgba(68, 170, 255, 0.9); }
+  .team-score.red { color: #ff6644; text-shadow: 0 0 10px rgba(255, 100, 70, 0.9); }
+  #timer-display {
+    font-size: 20px; color: #ffcc00; font-weight: bold;
+    letter-spacing: 2px;
+    padding: 0 12px;
+    border-left: 1px solid rgba(255, 200, 100, 0.3);
+    border-right: 1px solid rgba(255, 200, 100, 0.3);
+  }
+  #timer-display.warn { color: #ff4444; animation: pulse-warn 0.5s infinite; }
+  @keyframes pulse-warn {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* === صحة اللاعب في الوضع الجماعي (يمين أعلى الزاوية) === */
+  #player-health-display {
+    position: absolute; top: 12px; right: 12px;
+    display: none; flex-direction: column; align-items: flex-end;
+    z-index: 30; pointer-events: none;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px; border-radius: 10px;
+    border: 1px solid rgba(255, 100, 100, 0.5);
+  }
+  #player-health-display.show { display: flex; }
+  #player-health-display .label {
+    font-size: 10px; color: #ffaaaa; opacity: 0.85; letter-spacing: 1px; margin-bottom: 4px;
+  }
+  #player-health-bar-bg {
+    width: 120px; height: 10px;
+    background: rgba(80, 0, 0, 0.6);
+    border-radius: 5px; overflow: hidden;
+    border: 1px solid rgba(255, 50, 50, 0.5);
+  }
+  #player-health-bar-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #ff3030, #ffaa30, #30ff60);
+    transition: width 0.3s;
+  }
+  #player-health-text {
+    font-size: 16px; color: #fff; font-weight: bold; margin-top: 4px;
+  }
+
+  /* === الرصاص في الوضع الجماعي (يسار أعلى الزاوية) === */
+  #player-ammo-display {
+    position: absolute; top: 12px; left: 12px;
+    display: none; flex-direction: column; align-items: flex-start;
+    z-index: 30; pointer-events: none;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px; border-radius: 10px;
+    border: 1px solid rgba(255, 200, 100, 0.5);
+  }
+  #player-ammo-display.show { display: flex; }
+  #player-ammo-display .label {
+    font-size: 10px; color: #ffcc88; opacity: 0.85; letter-spacing: 1px; margin-bottom: 4px;
+  }
+  #player-ammo-text {
+    font-size: 18px; color: #ffcc00; font-weight: 900;
+    text-shadow: 0 0 6px rgba(255, 200, 0, 0.6);
+  }
+  #player-ammo-text .small {
+    font-size: 12px; color: #aaa; font-weight: normal;
+  }
+
+  /* === شاشة نهاية المباراة === */
+  #match-end-screen {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 100; pointer-events: auto;
+    padding: 20px;
+  }
+  #match-end-screen.show { display: flex; }
+  #match-result-title {
+    font-size: 40px; font-weight: 900; margin-bottom: 20px;
+    letter-spacing: 4px;
+  }
+  #match-result-title.victory {
+    background: linear-gradient(180deg, #ffcc00, #ff8800);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px rgba(255, 200, 0, 0.8));
+  }
+  #match-result-title.defeat {
+    background: linear-gradient(180deg, #ff4444, #aa0000);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px rgba(255, 80, 80, 0.8));
+  }
+  #match-result-title.draw {
+    background: linear-gradient(180deg, #cccccc, #888888);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  #match-final-scores {
+    font-size: 22px; margin-bottom: 20px;
+  }
+  #match-final-scores .blue { color: #44aaff; font-weight: bold; }
+  #match-final-scores .red { color: #ff6644; font-weight: bold; }
+
+  /* === شاشة الإيقاف المؤقت === */
+  #controls-info {
+    position: absolute; bottom: 20px; right: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 150, 0, 0.3);
+    border-radius: 12px; padding: 12px 16px;
+    font-size: 11px; color: #fff; opacity: 0.7;
+    max-width: 200px; line-height: 1.6;
+  }
+
+  /* === Game over === */
+  #game-over {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; z-index: 100;
+  }
+  #game-over.show { display: flex; }
+  #game-over h2 { font-size: 32px; color: #ff5050; margin-bottom: 16px; }
+  #game-over p { font-size: 18px; margin-bottom: 8px; }
+  #restart-btn {
+    margin-top: 22px; padding: 14px 34px;
+    background: #ff5050; border: none; border-radius: 25px;
+    color: #fff; font-size: 16px; font-weight: bold;
+  }
+
+  /* === Reload indicator === */
+  #reload-indicator {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, 60px);
+    background: rgba(0,0,0,0.7); color: #fff;
+    padding: 8px 18px; border-radius: 20px;
+    font-size: 13px; display: none; z-index: 13;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  #reload-indicator.show { display: block; }
+
+  @media (max-width: 380px) {
+    #joystick { width: 115px; height: 115px; bottom: 28px; left: 22px; }
+    #joystick-knob { width: 52px; height: 52px; }
+    #fire-btn { width: 92px; height: 92px; bottom: 38px; right: 22px; font-size: 13px; }
+    #reload-btn { width: 54px; height: 54px; bottom: 142px; right: 38px; font-size: 10px; }
+    #jump-btn { width: 60px; height: 60px; bottom: 70px; right: 130px; font-size: 11px; }
+    .hud-value { font-size: 16px; }
+    #health-bar { width: 90px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<div id="ui-overlay">
+  <div id="crosshair"><div class="dot"></div></div>
+  <div id="hit-marker"></div>
+  <div id="damage-flash"></div>
+  <div id="muzzle-flash"></div>
+  <div id="reload-indicator">جاري إعادة التعبئة...</div>
+
+  <div id="hud">
+    <div class="hud-box">
+      <div class="hud-label">النقاط</div>
+      <div class="hud-value" id="score-value">0</div>
+    </div>
+    <div class="hud-box center">
+      <div class="hud-label">الصحة</div>
+      <div class="hud-value" id="health-value">100</div>
+      <div id="health-bar"><div id="health-fill"></div></div>
+    </div>
+    <div class="hud-box left">
+      <div class="hud-label">الذخيرة</div>
+      <div class="hud-value" id="ammo-value">30 / 90</div>
+    </div>
+  </div>
+
+  <button id="pause-btn">إيقاف</button>
+
+  <div id="look-area"></div>
+
+  <div id="joystick">
+    <div id="joystick-base"></div>
+    <div id="joystick-knob"></div>
+  </div>
+
+  <button id="jump-btn">قفز</button>
+  <button id="reload-btn">إعادة</button>
+  <button id="fire-btn">إطلاق</button>
+</div>
+
+<div id="start-screen">
+  <h1 id="zaza-title">ZAZA WAR</h1>
+  <p id="zaza-subtitle">منظور الشخص الأول</p>
+  <button id="play-btn">▶ PLAY</button>
+  <div id="version-tag">الإصدار 1.0</div>
+</div>
+
+<div id="mode-screen">
+  <h2>اختر نمط اللعب</h2>
+  <div class="modes-row">
+    <div class="mode-card" id="mode-free">
+      <span class="icon">🎯</span>
+      <div class="title">وضع التدريب الحر</div>
+      <div class="desc">قاتل البوتات في ساحة مفتوحة<br>سجل أكبر عدد من النقاط!</div>
+    </div>
+    <div class="mode-card" id="mode-multi">
+      <span class="icon">👥</span>
+      <div class="title">وضع اللعب الجماعي</div>
+      <div class="desc">فريق أزرق ضد فريق أسود<br>5 دقائق من القتال</div>
+    </div>
+    <div class="mode-card" id="mode-online">
+      <span class="icon">🌐</span>
+      <div class="title">اللعب على الإنترنت</div>
+      <div class="desc">العب ضد لاعبين حقيقيين<br>عبر الإنترنت</div>
+      <div class="lock-badge" style="background:rgba(80,200,80,0.2);color:#88dd88;border-color:rgba(100,200,100,0.4);">متاح الآن</div>
+    </div>
+  </div>
+  <button id="back-btn">← رجوع</button>
+</div>
+
+<div id="setup-screen">
+  <h2>إعدادات المباراة الجماعية</h2>
+  <div class="setup-section">
+    <div class="setup-label">عدد اللاعبين</div>
+    <div class="option-row" id="team-size-row">
+      <button class="option-btn selected" data-size="1">1 ضد 1</button>
+      <button class="option-btn" data-size="2">2 ضد 2</button>
+      <button class="option-btn" data-size="3">3 ضد 3</button>
+      <button class="option-btn" data-size="4">4 ضد 4</button>
+    </div>
+  </div>
+  <div class="setup-section">
+    <div class="setup-label">الصعوبة</div>
+    <div class="option-row" id="difficulty-row">
+      <button class="option-btn difficulty-easy" data-diff="easy">سهل</button>
+      <button class="option-btn difficulty-medium selected" data-diff="medium">متوسط</button>
+      <button class="option-btn difficulty-hard" data-diff="hard">صعب</button>
+    </div>
+  </div>
+  <button id="play-game-btn">▶ العب</button>
+  <button id="setup-back-btn" style="margin-top:14px;padding:10px 24px;background:transparent;border:1px solid rgba(255,150,0,0.5);border-radius:20px;color:#ffaa00;font-size:13px;cursor:pointer;">← رجوع</button>
+</div>
+
+<div id="loading-screen">
+  <div id="loading-text">جاري تجهيز المباراة...</div>
+  <div class="loading-bar-container">
+    <div id="loading-bar-fill"></div>
+  </div>
+  <div id="loading-percent">0%</div>
+</div>
+
+<div id="team-ui">
+  <div class="team-block">
+    <div class="team-label blue">الأزرق</div>
+    <div class="team-score blue" id="blue-score">0</div>
+  </div>
+  <div id="timer-display">5:00</div>
+  <div class="team-block">
+    <div class="team-label red">الأحمر</div>
+    <div class="team-score red" id="red-score">0</div>
+  </div>
+</div>
+
+<div id="player-health-display">
+  <div class="label">صحتك</div>
+  <div id="player-health-bar-bg">
+    <div id="player-health-bar-fill"></div>
+  </div>
+  <div id="player-health-text">100</div>
+</div>
+
+<div id="player-ammo-display">
+  <div class="label">الرصاص</div>
+  <div id="player-ammo-text">30 <span class="small">/ 90</span></div>
+</div>
+
+<div id="room-modal">
+  <h3>اللعب على الإنترنت</h3>
+  <div class="room-section" id="create-section">
+    <div class="label">إنشاء غرفة جديدة</div>
+    <button class="room-btn" id="create-room-btn">إنشاء غرفة</button>
+    <div id="room-code-display" style="display:none"></div>
+    <div id="room-status"></div>
+  </div>
+  <div class="room-section">
+    <div class="label">الانضمام إلى غرفة</div>
+    <input class="room-input" id="join-code-input" placeholder="أدخل كود الغرفة" maxlength="6">
+    <button class="room-btn" id="join-room-btn">انضمام</button>
+  </div>
+  <button id="room-close-btn">إغلاق</button>
+</div>
+
+<div id="match-end-screen">
+  <h1 id="match-result-title">النصر!</h1>
+  <div id="match-final-scores"></div>
+  <button id="match-restart-btn" style="padding:14px 34px;background:linear-gradient(180deg,#ff8800,#cc0000);border:2px solid #ffcc00;border-radius:25px;color:#fff;font-size:16px;font-weight:bold;cursor:pointer;">إعادة المباراة</button>
+  <button id="match-menu-btn" style="margin-top:10px;padding:10px 24px;background:transparent;border:1px solid rgba(255,200,100,0.5);border-radius:20px;color:#ffaa00;font-size:14px;cursor:pointer;">القائمة الرئيسية</button>
+</div>
+
+<div id="controls-info" style="display:none">
+  <b>التحكم:</b><br>
+  • جويستك يسار = حركة<br>
+  • سحب الشاشة = نظر<br>
+  • زر إطلاق = نار<br>
+  • سحب فوق زر الإطلاق = نظر أثناء الإطلاق
+</div>
+
+<div id="game-over">
+  <h2>انتهت اللعبة!</h2>
+  <p>النقاط النهائية: <span id="final-score">0</span></p>
+  <button id="restart-btn">إعادة المحاولة</button>
+  <button id="menu-btn" style="margin-top:10px;padding:10px 24px;background:transparent;border:1px solid #ffcc00;border-radius:20px;color:#ffcc00;font-size:14px;">القائمة الرئيسية</button>
+</div>
+
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+// ============================================================
+//  لعبة شوتر - منظور الشخص الأول (مخصصة للهاتف)
+// ============================================================
+
+let scene, camera, renderer, clock;
+let player = {
+  position: new THREE.Vector3(0, 1.7, 0),
+  velocity: new THREE.Vector3(0, 0, 0),
+  onGround: true,
+  health: 100,
+  userData: { isDead: false, isEnemy: false }
+};
+let yaw = 0, pitch = 0;
+let joystickVector = { x: 0, y: 0 };
+let isFiring = false;
+let weaponGroup, weaponParts = {}, muzzleFlashMesh, muzzleFlashLight;
+let enemies = [];
+let score = 0;
+let ammo = 30, magSize = 30, reserveAmmo = 90;
+let isReloading = false;
+let gameRunning = false;
+let lastShotTime = 0;
+const fireRate = 85;  // أسرع = 85ms بدلاً من 110ms (إطلاق أكثر سلاسة)
+let audioCtx = null;
+let animFrameId = null;
+let reloadAnimT = 0;
+let reloadAnimActive = false;
+let muzzleFlashTimer = 0;
+let skyMesh = null;
+
+// === متغيرات الوضع الجماعي ===
+let gameMode = 'free';   // 'free' أو 'team'
+let teamGame = {
+  teamSize: 1,
+  difficulty: 'medium',
+  blueScore: 0,
+  redScore: 0,
+  matchTimeLeft: 300,   // 5 دقائق بالثواني
+  matchActive: false,
+  matchEnded: false,
+  allies: [],            // بوتات الفريق الأزرق (حلفاء اللاعب)
+  // البوتات الحمراء تبقى في مصفوفة enemies مع تمييز team='red'
+};
+
+// === متغيرات PeerJS للعب عبر الإنترنت ===
+let peer = null;
+let peerConnections = {};  // { peerId: connection }
+let myPeerId = null;
+let myRoomCode = null;
+let isOnlineMode = false;
+let isRoomHost = false;
+let onlinePlayers = {};  // { peerId: { team, mesh, lastUpdate } }
+let lastStateSync = 0;
+const STATE_SYNC_INTERVAL = 50;  // مزامنة كل 50ms
+
+// === مصفوفة عوائق التصادم (للمباني والجدران) ===
+// كل عنصر: { minX, maxX, minZ, maxZ, topY } - المنطقة غير القابلة للاختراق
+let colliders = [];
+// === منصات قابلة للصعود (للوقوف عليها) ===
+let platforms = [];
+
+// === التهيئة ===
+function init() {
+  scene = new THREE.Scene();
+
+  // سماء متدرجة لطيفة ومضيئة
+  const skyGeo = new THREE.SphereGeometry(200, 16, 12);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      topColor: { value: new THREE.Color(0x5fa8e8) },     // أزرق سماوي مشرق
+      midColor: { value: new THREE.Color(0xb8d8f0) },     // أزرق فاتح جداً
+      bottomColor: { value: new THREE.Color(0xfde4b8) }   // ذهبي مشرق (أفق)
+    },
+    vertexShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vWorldPos;
+      uniform vec3 topColor;
+      uniform vec3 midColor;
+      uniform vec3 bottomColor;
+      void main() {
+        float h = normalize(vWorldPos).y;
+        vec3 col;
+        if (h > 0.0) {
+          col = mix(midColor, topColor, smoothstep(0.0, 0.55, h));
+        } else {
+          col = mix(midColor, bottomColor, smoothstep(0.0, -0.25, h));
+        }
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+  skyMesh = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(skyMesh);
+
+  // ضباب خفيف جداً
+  // ضباب أبعد وأخف (لا يسبب ضبابية قريبة)
+  scene.fog = new THREE.Fog(0xc4d8e8, 90, 200);
+
+  // الكاميرا
+  camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 250);
+  camera.rotation.order = 'YXZ';
+  camera.position.copy(player.position);
+
+  // العارض - محسّن للسلاسة (نفس إعدادات النسخة السابقة)
+  renderer = new THREE.WebGLRenderer({
+    canvas: document.getElementById('game-canvas'),
+    antialias: false,
+    powerPreference: 'high-performance',
+    alpha: false,
+    stencil: false,
+    depth: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  // pixel ratio ديناميكي (الإعداد السابق الأكثر سلاسة)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.BasicShadowMap;  // أبسط وأسرع
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.4;  // رفعناها من 1.15 إلى 1.4 لإضاءة أكثر
+
+  clock = new THREE.Clock();
+
+  // === الإضاءة - أكثر سطوعاً (لإزالة الضبابية) ===
+  const ambient = new THREE.AmbientLight(0xffffff, 1.5);    // رفعناها من 0.95 إلى 1.5
+  scene.add(ambient);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 2.5);      // رفعناها من 1.6 إلى 2.5
+  sun.position.set(25, 40, 15);
+  sun.castShadow = true;
+  sun.shadow.mapSize.width = 1024;
+  sun.shadow.mapSize.height = 1024;
+  sun.shadow.camera.left = -40;
+  sun.shadow.camera.right = 40;
+  sun.shadow.camera.top = 40;
+  sun.shadow.camera.bottom = -40;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 100;
+  sun.shadow.bias = -0.001;
+  scene.add(sun);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xaaa090, 1.2);  // رفعناها كثيراً لإضاءة أكثر
+  scene.add(hemi);
+
+  // بناء المشهد
+  buildCity();
+  buildWeapon();
+
+  for (let i = 0; i < 4; i++) spawnEnemy();
+
+  setupControls();
+  window.addEventListener('resize', onResize);
+  animate();
+}
+
+// === بناء الساحة المفتوحة (لا تضاريس - فقط اللاعب والبوتات) ===
+function buildCity() {
+  // === الأرضية - ساحة خضراء كبيرة مفتوحة ===
+  const groundGeo = new THREE.PlaneGeometry(120, 120);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x3a4a2a, roughness: 0.95 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // دائرة في الوسط (للجمالية فقط - علامة المنطقة)
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.4 });
+  const ringGeo = new THREE.RingGeometry(2.5, 3, 32);
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.02;
+  scene.add(ring);
+
+  // === صناديق قليلة كأغطية فقط (4 صناديق) ===
+  createCrate(8, 8, 1.2);
+  createCrate(-8, -8, 1.2);
+  createCrate(10, -6, 1.0);
+  createCrate(-10, 6, 1.4);
+
+  // === جدران الحدود (مخفية بعيدة - فقط لمنع الخروج) ===
+  const wallH = 20;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9, transparent: true, opacity: 0.6 });
+  const walls = [
+    { x: 50, z: 0, w: 0.5, d: 100 },
+    { x: -50, z: 0, w: 0.5, d: 100 },
+    { x: 0, z: 50, w: 100, d: 0.5 },
+    { x: 0, z: -50, w: 100, d: 0.5 }
+  ];
+  walls.forEach(w => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w.w, wallH, w.d), wallMat);
+    wall.position.set(w.x, wallH/2, w.z);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+    scene.add(wall);
+    colliders.push({
+      minX: w.x - w.w/2, maxX: w.x + w.w/2,
+      minZ: w.z - w.d/2, maxZ: w.z + w.d/2,
+      topY: wallH
+    });
+  });
+}
+
+function createBuilding(x, z, w, h, d, color) {
+  const bMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8, metalness: 0.05 });
+  const building = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bMat);
+  building.position.set(x, h / 2, z);
+  building.castShadow = true;
+  building.receiveShadow = true;
+  scene.add(building);
+
+  // سقف بلون أغمق
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 });
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.15, 0.1, d + 0.15), roofMat);
+  roof.position.set(x, h + 0.05, z);
+  scene.add(roof);
+
+  // قاعدة (طابق أرضي بلون مختلف)
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.85 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(w + 0.1, 1, d + 0.1), baseMat);
+  base.position.set(x, 0.5, z);
+  scene.add(base);
+
+  // النوافذ - مصفوفة منظمة على كل الجوانب الأربعة
+  const winMat = new THREE.MeshStandardMaterial({
+    color: 0xffe88a,
+    emissive: 0xffe88a,
+    emissiveIntensity: 0.5,
+    roughness: 0.25
+  });
+  const floors = Math.floor((h - 1.5) / 2.5);
+  const cols = Math.max(2, Math.floor(w / 1.8));
+  const rows = Math.max(2, Math.floor(d / 1.8));
+
+  for (let f = 0; f < floors; f++) {
+    for (let c = 0; c < cols; c++) {
+      if (Math.random() > 0.65) continue;
+      // الواجهة الأمامية (-z)
+      const win1 = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1), winMat);
+      win1.position.set(x - w/2 + 0.9 + c * 1.7, 1.8 + f * 2.5, z - d/2 - 0.02);
+      scene.add(win1);
+      // الواجهة الخلفية (+z)
+      const win2 = win1.clone();
+      win2.position.z = z + d/2 + 0.02;
+      win2.rotation.y = Math.PI;
+      scene.add(win2);
+    }
+    for (let r = 0; r < rows; r++) {
+      if (Math.random() > 0.65) continue;
+      // الواجهة اليمنى (+x)
+      const win3 = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1), winMat);
+      win3.position.set(x + w/2 + 0.02, 1.8 + f * 2.5, z - d/2 + 0.9 + r * 1.7);
+      win3.rotation.y = -Math.PI / 2;
+      scene.add(win3);
+      // الواجهة اليسرى (-x)
+      const win4 = win3.clone();
+      win4.position.x = x - w/2 - 0.02;
+      win4.rotation.y = Math.PI / 2;
+      scene.add(win4);
+    }
+  }
+
+  // باب في الواجهة الأمامية
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 });
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2), doorMat);
+  door.position.set(x, 1, z - d/2 - 0.03);
+  scene.add(door);
+
+  // كشف تصادم
+  colliders.push({
+    minX: x - w/2 - 0.3, maxX: x + w/2 + 0.3,
+    minZ: z - d/2 - 0.3, maxZ: z + d/2 + 0.3,
+    topY: h
+  });
+}
+
+function createLamp(x, z, withLight) {
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.7, roughness: 0.4 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 5), poleMat);
+  pole.position.set(x, 2.5, z);
+  pole.castShadow = true;
+  scene.add(pole);
+
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6), poleMat);
+  arm.rotation.z = Math.PI / 2;
+  arm.position.set(x + 0.3, 4.7, z);
+  scene.add(arm);
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0xfff2a0,
+    emissive: 0xfff2a0,
+    emissiveIntensity: 0.85
+  });
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.4), headMat);
+  head.position.set(x + 0.6, 4.7, z);
+  scene.add(head);
+
+  // ضوء نقطي فقط لبعض الأعمدة (للأداء)
+  if (withLight) {
+    const light = new THREE.PointLight(0xffeeaa, 0.5, 8);
+    light.position.set(x + 0.6, 4.5, z);
+    scene.add(light);
+  }
+}
+
+function createCar(x, z, rot) {
+  const carGroup = new THREE.Group();
+  const colors = [0xcc2020, 0x2060cc, 0x20a040, 0xeeeeee, 0x222222, 0xffaa20, 0x9b59b6, 0xff8c00];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+
+  const bodyMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.55, roughness: 0.35 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4.2), bodyMat);
+  body.position.y = 0.7;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  carGroup.add(body);
+
+  const cabinMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.4, roughness: 0.15 });
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.85, 2.2), cabinMat);
+  cabin.position.set(0, 1.45, -0.2);
+  cabin.castShadow = true;
+  carGroup.add(cabin);
+
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+  [[1, 1.3], [-1, 1.3], [1, -1.3], [-1, -1.3]].forEach(([wx, wz]) => {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(wx, 0.4, wz);
+    carGroup.add(wheel);
+  });
+
+  const hlMat = new THREE.MeshStandardMaterial({ color: 0xffffcc, emissive: 0xffffcc, emissiveIntensity: 0.7 });
+  [[0.6, -2.1], [-0.6, -2.1]].forEach(([hx, hz]) => {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.1), hlMat);
+    hl.position.set(hx, 0.7, hz);
+    carGroup.add(hl);
+  });
+
+  carGroup.position.set(x, 0, z);
+  carGroup.rotation.y = rot;
+  scene.add(carGroup);
+
+  colliders.push({
+    minX: x - 1.2, maxX: x + 1.2,
+    minZ: z - 2.2, maxZ: z + 2.2,
+    topY: 1.5
+  });
+}
+
+// === شجرة (جذع أسطواني + أوراق كروية) ===
+function createTree(x, z) {
+  const treeGroup = new THREE.Group();
+
+  // الجذع
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a2a1a, roughness: 0.95 });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2.5, 6), trunkMat);
+  trunk.position.y = 1.25;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  treeGroup.add(trunk);
+
+  // الأوراق - 3 كرات بأحجام مختلفة
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x2d5a2d, roughness: 0.9 });
+  const leaf1 = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), leafMat);
+  leaf1.position.y = 2.8;
+  leaf1.castShadow = true;
+  leaf1.receiveShadow = true;
+  treeGroup.add(leaf1);
+
+  const leaf2 = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), leafMat);
+  leaf2.position.set(0.6, 3.5, 0.3);
+  leaf2.castShadow = true;
+  treeGroup.add(leaf2);
+
+  const leaf3 = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), leafMat);
+  leaf3.position.set(-0.5, 3.4, -0.4);
+  leaf3.castShadow = true;
+  treeGroup.add(leaf3);
+
+  treeGroup.position.set(x, 0, z);
+  scene.add(treeGroup);
+
+  // كشف تصادم بسيط للجذع
+  colliders.push({
+    minX: x - 0.4, maxX: x + 0.4,
+    minZ: z - 0.4, maxZ: z + 0.4,
+    topY: 2.5
+  });
+}
+
+function createCrate(x, z, size) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9b6b3c, roughness: 0.85 });
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
+  crate.position.set(x, size/2, z);
+  crate.castShadow = true;
+  crate.receiveShadow = true;
+  scene.add(crate);
+
+  const edgeMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 });
+  const edge = new THREE.Mesh(new THREE.BoxGeometry(size + 0.04, 0.06, size + 0.04), edgeMat);
+  edge.position.set(x, size/2, z);
+  scene.add(edge);
+
+  platforms.push({
+    minX: x - size/2, maxX: x + size/2,
+    minZ: z - size/2, maxZ: z + size/2,
+    topY: size
+  });
+}
+
+function createPlatform(x, z, height) {
+  const w = 2.5, d = 2.5;
+  const mat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.85 });
+  const plat = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d), mat);
+  plat.position.set(x, height, z);
+  plat.castShadow = true;
+  plat.receiveShadow = true;
+  scene.add(plat);
+
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 });
+  [[-w/2+0.1, -d/2+0.1], [w/2-0.1, -d/2+0.1], [-w/2+0.1, d/2-0.1], [w/2-0.1, d/2-0.1]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.15, height, 0.15), legMat);
+    leg.position.set(x + lx, height/2, z + lz);
+    leg.castShadow = true;
+    scene.add(leg);
+  });
+
+  platforms.push({
+    minX: x - w/2, maxX: x + w/2,
+    minZ: z - d/2, maxZ: z + d/2,
+    topY: height + 0.15
+  });
+}
+
+function createStairs(x, z, direction) {
+  const stepMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.85 });
+  const stepCount = 6;
+  const stepHeight = 0.3;
+  const stepDepth = 0.5;
+  const stepWidth = 2.5;
+
+  for (let i = 0; i < stepCount; i++) {
+    const step = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth), stepMat);
+    let stepX = x, stepZ = z, stepY = stepHeight/2 + i * stepHeight;
+    if (direction === 'north') stepZ = z - i * stepDepth;
+    else if (direction === 'south') stepZ = z + i * stepDepth;
+    else if (direction === 'east') stepX = x + i * stepDepth;
+    else if (direction === 'west') stepX = x - i * stepDepth;
+    step.position.set(stepX, stepY, stepZ);
+    step.castShadow = true;
+    step.receiveShadow = true;
+    scene.add(step);
+
+    let pX = x, pZ = z;
+    if (direction === 'north') pZ = z - i * stepDepth;
+    else if (direction === 'south') pZ = z + i * stepDepth;
+    else if (direction === 'east') pX = x + i * stepDepth;
+    else if (direction === 'west') pX = x - i * stepDepth;
+
+    platforms.push({
+      minX: pX - stepWidth/2, maxX: pX + stepWidth/2,
+      minZ: pZ - stepDepth/2 - 0.1, maxZ: pZ + stepDepth/2 + 0.1,
+      topY: stepY + stepHeight/2
+    });
+  }
+}
+
+function createBush(x, z) {
+  const bushMat = new THREE.MeshStandardMaterial({ color: 0x3a6a2a, roughness: 0.95 });
+  const bush = new THREE.Mesh(new THREE.SphereGeometry(0.5 + Math.random() * 0.3, 6, 5), bushMat);
+  bush.position.set(x, 0.4, z);
+  bush.scale.y = 0.7;
+  bush.castShadow = true;
+  bush.receiveShadow = true;
+  scene.add(bush);
+}
+
+// === بناء السلاح (محسّن وأكثر تفصيلاً) ===
+function buildWeapon() {
+  weaponGroup = new THREE.Group();
+
+  // === مواد ملوّنة (لون رئيسي: أخضر عسكري + بُني خشبي + ذهبي) ===
+  // 1) الأخضر العسكري - الجسم الرئيسي (مثل الأسلحة القديمة الحقيقية)
+  const gunmetal = new THREE.MeshStandardMaterial({
+    color: 0x4a6b3a,         // أخضر عسكري داكن (OD green)
+    metalness: 0.6,
+    roughness: 0.45
+  });
+  // 2) بُني خشبي - المقابض والأخمص (مثل AK-47 / M1 Garand)
+  const polymer = new THREE.MeshStandardMaterial({
+    color: 0x8b5a2b,         // بُني خشبي جميل
+    metalness: 0.05,
+    roughness: 0.75
+  });
+  // 3) ذهبي/برونزي - الماسورة وكاتم الصوت (مثل الأسلحة الفاخرة)
+  const blackMetal = new THREE.MeshStandardMaterial({
+    color: 0xb8860b,        // ذهبي/برونزي
+    metalness: 0.95,
+    roughness: 0.25
+  });
+  // 4) أخضر داكن - handguard
+  const handguardMat = new THREE.MeshStandardMaterial({
+    color: 0x2d4a22,        // أخضر داكن
+    metalness: 0.2,
+    roughness: 0.7
+  });
+  // 5) نحاسي/ذهبي لامع - الأزرار والمفاتيح
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: 0xd4a020,        // ذهبي فاتح
+    metalness: 0.95,
+    roughness: 0.2,
+    emissive: 0x4a3010,
+    emissiveIntensity: 0.3
+  });
+  // 6) أحمر متوهج - نقطة المنظار
+  const redMat = new THREE.MeshStandardMaterial({
+    color: 0xff3030,
+    emissive: 0xff1010,
+    emissiveIntensity: 0.9
+  });
+
+  // === المُستقبِل العلوي (Upper Receiver) - الجسم الرئيسي ===
+  const upperReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.55), gunmetal);
+  upperReceiver.position.set(0, 0.02, 0);
+  weaponGroup.add(upperReceiver);
+  weaponParts.receiver = upperReceiver;
+
+  // === المُستقبِل السفلي (Lower Receiver) - يحمل الزناد والمخزن ===
+  const lowerReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.3), gunmetal);
+  lowerReceiver.position.set(0, -0.08, 0.1);
+  weaponGroup.add(lowerReceiver);
+
+  // === Picatinny rails (قضبان التثبيت العلوية) ===
+  const railTop = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.5), blackMetal);
+  railTop.position.set(0, 0.11, -0.05);
+  weaponGroup.add(railTop);
+  // أجزاء صغيرة على القضيب (تشبه القضبان الحقيقية)
+  for (let i = -0.2; i <= 0.2; i += 0.06) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.04, 0.012), blackMetal);
+    rib.position.set(0, 0.12, i);
+    weaponGroup.add(rib);
+  }
+
+  // === الماسورة (Barrel) ===
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 16), blackMetal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.02, -0.5);
+  weaponGroup.add(barrel);
+  weaponParts.barrel = barrel;
+
+  // === كاتم الصوت (Suppressor) - أسطوانة أكبر في النهاية ===
+  const suppressor = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.18, 16), blackMetal);
+  suppressor.rotation.x = Math.PI / 2;
+  suppressor.position.set(0, 0.02, -0.78);
+  weaponGroup.add(suppressor);
+  // خطوط على كاتم الصوت (للجمالية + الاستدارة)
+  for (let i = 0; i < 5; i++) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.005, 4, 16), blackMetal);
+    ring.position.set(0, 0.02, -0.72 - i * 0.035);
+    weaponGroup.add(ring);
+  }
+
+  // === الـ Handguard (غطاء الماسورة) - بتصميم M-LOK ===
+  const handguard = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.35, 12), handguardMat);
+  handguard.rotation.x = Math.PI / 2;
+  handguard.position.set(0, 0.02, -0.32);
+  weaponGroup.add(handguard);
+  // فتحات M-LOK على الجوانب (مكعبات مظلمة)
+  for (let i = -0.12; i <= 0.12; i += 0.07) {
+    const slot1 = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.04), blackMetal);
+    slot1.position.set(0.075, 0.02, -0.32 + i);
+    weaponGroup.add(slot1);
+    const slot2 = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.04), blackMetal);
+    slot2.position.set(-0.075, 0.02, -0.32 + i);
+    weaponGroup.add(slot2);
+  }
+
+  // === المقبض المسدسي (Pistol Grip) ===
+  const gripGroup = new THREE.Group();
+  const gripTop = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.11), polymer);
+  gripTop.position.y = 0;
+  gripGroup.add(gripTop);
+  const gripBody = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.18, 0.1), polymer);
+  gripBody.position.set(0, -0.13, 0.03);
+  gripBody.rotation.x = -0.2;
+  gripGroup.add(gripBody);
+  gripGroup.position.set(0, -0.08, 0.18);
+  weaponGroup.add(gripGroup);
+  weaponParts.grip = gripGroup;
+
+  // === المخزن (Magazine) - منحني قليلاً مثل AR-15 ===
+  const magGroup = new THREE.Group();
+  const magBody = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.22, 0.1), gunmetal);
+  magBody.position.y = -0.13;
+  magGroup.add(magBody);
+  const magBase = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.11), polymer);
+  magBase.position.y = -0.25;
+  magGroup.add(magBase);
+  // علامة PMAG صفراء (للجمالية)
+  const magDot = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 0.012), accentMat);
+  magDot.position.set(0, -0.05, 0.052);
+  magGroup.add(magDot);
+  // زاوية المخزن (مائل قليلاً للأمام)
+  magGroup.position.set(0, -0.14, -0.02);
+  magGroup.rotation.x = 0.1;
+  weaponGroup.add(magGroup);
+  weaponParts.magazine = magGroup;
+
+  // === المنظار (Red Dot Sight) - تصميم احترافي ===
+  const sightBase = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.12), gunmetal);
+  sightBase.position.set(0, 0.14, 0);
+  weaponGroup.add(sightBase);
+  const sightBody = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 12), blackMetal);
+  sightBody.rotation.z = Math.PI / 2;
+  sightBody.position.set(0, 0.18, 0);
+  weaponGroup.add(sightBody);
+  // عدسة أمامية (توهج أحمر = red dot)
+  const redDot = new THREE.Mesh(new THREE.CircleGeometry(0.012, 12), redMat);
+  redDot.position.set(0, 0.18, -0.06);
+  weaponGroup.add(redDot);
+
+  // === مقبض الشحن (Charging Handle) - يتحرك أثناء التلقيم ===
+  const chargingHandle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.025, 0.1), blackMetal);
+  chargingHandle.position.set(0, 0.08, 0.12);
+  weaponGroup.add(chargingHandle);
+  // مقبض T-shape
+  const chargingT = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.03), polymer);
+  chargingT.position.set(0, 0.08, 0.17);
+  weaponGroup.add(chargingT);
+  weaponParts.chargingHandle = chargingHandle;
+
+  // === الأخمص (Stock) - تصميم قابل للتعديل ===
+  const stockBody = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.3), polymer);
+  stockBody.position.set(0, -0.02, 0.36);
+  weaponGroup.add(stockBody);
+  weaponParts.stock = stockBody;
+  // أنبوب الأخمص (Buffer tube)
+  const bufferTube = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.18, 12), gunmetal);
+  bufferTube.rotation.x = Math.PI / 2;
+  bufferTube.position.set(0, -0.02, 0.27);
+  weaponGroup.add(bufferTube);
+  // وسادة الكتف (Butt-pad) - بُني داكن متناسق مع الخشب
+  const buttpad = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.13, 0.025), new THREE.MeshStandardMaterial({
+    color: 0x3a2a1a, roughness: 0.95
+  }));
+  buttpad.position.set(0, -0.02, 0.52);
+  weaponGroup.add(buttpad);
+
+  // === الزناد (Trigger) ===
+  const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.025), blackMetal);
+  trigger.position.set(0, -0.12, 0.13);
+  weaponGroup.add(trigger);
+
+  // === حارسة الزناد (Trigger Guard) ===
+  const triggerGuard = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12, Math.PI), gunmetal);
+  triggerGuard.rotation.x = Math.PI;
+  triggerGuard.position.set(0, -0.1, 0.15);
+  weaponGroup.add(triggerGuard);
+
+  // === أزرار/مفاتيح جانبية للزينة (للظهور الاحترافي) ===
+  // زر الإطلاق الانتقائي (Selector Switch)
+  const selectorSwitch = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.04, 8), accentMat);
+  selectorSwitch.rotation.z = Math.PI / 2;
+  selectorSwitch.position.set(0.08, -0.05, 0.1);
+  weaponGroup.add(selectorSwitch);
+  // زر تحرير المخزن (Mag Release)
+  const magRelease = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.015, 0.015), blackMetal);
+  magRelease.position.set(0.075, -0.05, 0.05);
+  weaponGroup.add(magRelease);
+
+  // === وميض الفوهة ===
+  const flashMat = new THREE.MeshBasicMaterial({
+    color: 0xffee88,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  muzzleFlashMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), flashMat);
+  muzzleFlashMesh.position.set(0, 0.02, -0.88);
+  weaponGroup.add(muzzleFlashMesh);
+
+  // ضوء الوميض
+  muzzleFlashLight = new THREE.PointLight(0xffcc55, 0, 10);
+  muzzleFlashLight.position.set(0, 0.02, -0.88);
+  weaponGroup.add(muzzleFlashLight);
+
+  // موضع السلاح على يمين الكاميرا
+  weaponGroup.position.set(0.28, -0.26, -0.55);
+  weaponGroup.rotation.y = -0.06;
+
+  camera.add(weaponGroup);
+  scene.add(camera);
+}
+
+// === توليد الأعداء ===
+function spawnEnemy() {
+  const enemy = new THREE.Group();
+
+  // === مواد الروبوت ===
+  // معدن رمادي داكن للجسم (معدني لامع)
+  const metalBody = new THREE.MeshStandardMaterial({
+    color: 0x4a4a52,
+    metalness: 0.85,
+    roughness: 0.35
+  });
+  // معدن أغمق للأطراف
+  const metalDark = new THREE.MeshStandardMaterial({
+    color: 0x2a2a30,
+    metalness: 0.9,
+    roughness: 0.25
+  });
+  // لون نحاسي/برتقالي للتفاصيل
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: 0xc06030,
+    metalness: 0.8,
+    roughness: 0.4
+  });
+  // أحمر متوهج للعيون
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: 0xff2020,
+    emissive: 0xff0000,
+    emissiveIntensity: 1.5
+  });
+  // أزرق كهربائي للصدر
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0x00aaff,
+    emissive: 0x0088ff,
+    emissiveIntensity: 1.2
+  });
+
+  // === الصدر - درع معدني مع لوحات ===
+  const torsoGroup = new THREE.Group();
+  // الجسم الرئيسي
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), metalBody);
+  torso.position.y = 1.1;
+  torso.castShadow = true;
+  torsoGroup.add(torso);
+  // صفيحة صدر علوية (ياقة)
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.1), metalDark);
+  chestPlate.position.set(0, 1.5, 0.25);
+  chestPlate.castShadow = true;
+  torsoGroup.add(chestPlate);
+  // لبّ مضيء (core) في الصدر
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), coreMat);
+  core.position.set(0, 1.2, 0.28);
+  torsoGroup.add(core);
+  // حلقة حول اللب
+  const coreRing = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.02, 4, 12), accentMat);
+  coreRing.position.set(0, 1.2, 0.28);
+  torsoGroup.add(coreRing);
+  enemy.add(torsoGroup);
+  const body = torso;
+
+  // === الرأس - بشكل خوذة روبوت ===
+  const headGroup = new THREE.Group();
+  // الرأس الرئيسي
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), metalBody);
+  head.castShadow = true;
+  headGroup.add(head);
+  // واقي زجاجي أمامي (viser) - شريط أحمر متوهج
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.05), eyeMat);
+  visor.position.set(0, 0.05, 0.25);
+  headGroup.add(visor);
+  // هوائي على الجانب
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 6), metalDark);
+  antenna.position.set(0.2, 0.4, 0);
+  antenna.rotation.z = -0.3;
+  headGroup.add(antenna);
+  // كرة في نهاية الهوائي
+  const antennaBall = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), accentMat);
+  antennaBall.position.set(0.27, 0.6, 0);
+  headGroup.add(antennaBall);
+  // أجزاء جانبية على الرأس (قنوات تهوية)
+  const ventL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.1), metalDark);
+  ventL.position.set(-0.27, 0, 0);
+  headGroup.add(ventL);
+  const ventR = ventL.clone();
+  ventR.position.x = 0.27;
+  headGroup.add(ventR);
+  headGroup.position.y = 1.9;
+  enemy.add(headGroup);
+  const headPart = head;
+
+  // === الأذرع - مفصلية ===
+  // ذراع يسار
+  const armLGroup = new THREE.Group();
+  const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), metalDark);
+  shoulderL.castShadow = true;
+  armLGroup.add(shoulderL);
+  const upperArmL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.22), metalBody);
+  upperArmL.position.y = -0.3;
+  upperArmL.castShadow = true;
+  armLGroup.add(upperArmL);
+  const elbowL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), metalDark);
+  elbowL.position.y = -0.55;
+  armLGroup.add(elbowL);
+  const forearmL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.45, 0.2), metalBody);
+  forearmL.position.y = -0.8;
+  forearmL.castShadow = true;
+  armLGroup.add(forearmL);
+  // مخلب في النهاية
+  const handL = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.25, 6), accentMat);
+  handL.position.y = -1.1;
+  handL.rotation.x = Math.PI;
+  armLGroup.add(handL);
+  armLGroup.position.set(-0.5, 1.5, 0);
+  enemy.add(armLGroup);
+  // ذراع يمين (نسخة)
+  const armRGroup = armLGroup.clone();
+  armRGroup.position.x = 0.5;
+  enemy.add(armRGroup);
+
+  // === الأرجل - مفصلية ===
+  const legLGroup = new THREE.Group();
+  const hipL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), metalDark);
+  hipL.castShadow = true;
+  legLGroup.add(hipL);
+  const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.26), metalBody);
+  thighL.position.y = -0.3;
+  thighL.castShadow = true;
+  legLGroup.add(thighL);
+  const kneeL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), metalDark);
+  kneeL.position.y = -0.55;
+  legLGroup.add(kneeL);
+  const shinL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), metalBody);
+  shinL.position.y = -0.8;
+  shinL.castShadow = true;
+  legLGroup.add(shinL);
+  // قدم
+  const footL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.4), metalDark);
+  footL.position.set(0, -1.1, 0.05);
+  footL.castShadow = true;
+  legLGroup.add(footL);
+  legLGroup.position.set(-0.2, 0.8, 0);
+  enemy.add(legLGroup);
+  const legRGroup = legLGroup.clone();
+  legRGroup.position.x = 0.2;
+  enemy.add(legRGroup);
+
+  // موقع عشوائي حول اللاعب
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 18 + Math.random() * 25;
+  enemy.position.set(
+    player.position.x + Math.cos(angle) * dist,
+    0,
+    player.position.z + Math.sin(angle) * dist
+  );
+  enemy.position.x = Math.max(-45, Math.min(45, enemy.position.x));
+  enemy.position.z = Math.max(-45, Math.min(45, enemy.position.z));
+
+  enemy.userData = {
+    health: 100,
+    speed: 1.4 + Math.random() * 1.4,
+    isEnemy: true,
+    lastAttack: 0,
+    body: body,
+    head: headPart,
+    legL: legLGroup,
+    legR: legRGroup,
+    walkT: Math.random() * Math.PI * 2
+  };
+
+  scene.add(enemy);
+  enemies.push(enemy);
+}
+
+// === كشف التصادم ===
+function checkCollision(x, z, radius = 0.4) {
+  // فحص جميع المباني والجدران
+  for (let c of colliders) {
+    if (x + radius > c.minX && x - radius < c.maxX &&
+        z + radius > c.minZ && z - radius < c.maxZ) {
+      return c;  // تصادم
+    }
+  }
+  return null;
+}
+
+// === فحص الوقوف على منصة ===
+// تعيد ارتفاع أعلى منصة يمكن أن يقف عليها اللاعب، أو null
+// newFeetY: موضع أقدام اللاعب في هذا الإطار (player.y - 1.7)
+// prevFeetY: موضع أقدام اللاعب في الإطار السابق
+function checkPlatformSupport(x, z, newFeetY, prevFeetY) {
+  let support = null;
+  for (let p of platforms) {
+    if (x > p.minX && x < p.maxX && z > p.minZ && z < p.maxZ) {
+      // الحالة 1: اللاعب يعبر القمة من الأعلى للأسفل (قفز وكان أعلى، الآن يهبط عبر القمة)
+      if (prevFeetY >= p.topY - 0.01 && newFeetY <= p.topY + 0.01) {
+        if (support === null || p.topY > support) {
+          support = p.topY;
+        }
+      }
+      // الحالة 2: اللاعب يقف بالفعل على القمة (ضمن نطاق صغير فوق القمة)
+      else if (newFeetY >= p.topY - 0.05 && newFeetY <= p.topY + 0.5) {
+        if (support === null || p.topY > support) {
+          support = p.topY;
+        }
+      }
+      // الحالة 3: اللاعب كان على المنصة في الإطار السابق وما زال فوقها
+      // (نمنعه من السقوط عبرها إذا كان يقف عليها)
+      else if (prevFeetY >= p.topY - 0.1 && prevFeetY <= p.topY + 0.5 && newFeetY < p.topY - 0.05) {
+        if (support === null || p.topY > support) {
+          support = p.topY;
+        }
+      }
+      // الحالة 4 (للسلالم): اللاعب يمشي على أرضية بسيطة، ويصعد درجة صغيرة
+      // إذا كانت قمة المنصة أعلى بقليل من الأرض الحالية (≤ 0.4) فإنه يصعدها تلقائياً
+      else if (newFeetY >= p.topY - 0.4 && newFeetY < p.topY - 0.05 && p.topY <= 1.5) {
+        if (support === null || p.topY > support) {
+          support = p.topY;
+        }
+      }
+    }
+  }
+  return support;
+}
+
+// === التحكم - للهاتف فقط (Pointer Events) ===
+function setupControls() {
+  // === الجويستيك ===
+  const joystick = document.getElementById('joystick');
+  const knob = document.getElementById('joystick-knob');
+  let joyActive = false;
+  let joyCenter = { x: 0, y: 0 };
+  const maxRadius = 50;
+
+  joystick.style.touchAction = 'none';
+
+  joystick.addEventListener('pointerdown', e => {
+    if (joyActive) return;
+    joyActive = true;
+    joystick.setPointerCapture(e.pointerId);
+    const rect = joystick.getBoundingClientRect();
+    joyCenter.x = rect.left + rect.width / 2;
+    joyCenter.y = rect.top + rect.height / 2;
+    updateJoystick(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+
+  joystick.addEventListener('pointermove', e => {
+    if (!joyActive) return;
+    updateJoystick(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+
+  const endJoy = e => {
+    if (!joyActive) return;
+    joyActive = false;
+    knob.style.transform = 'translate(-50%, -50%)';
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+    if (joystick.hasPointerCapture && joystick.hasPointerCapture(e.pointerId)) {
+      joystick.releasePointerCapture(e.pointerId);
+    }
+  };
+  joystick.addEventListener('pointerup', endJoy);
+  joystick.addEventListener('pointercancel', endJoy);
+
+  function updateJoystick(tx, ty) {
+    let dx = tx - joyCenter.x;
+    let dy = ty - joyCenter.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > maxRadius) {
+      dx = (dx / dist) * maxRadius;
+      dy = (dy / dist) * maxRadius;
+    }
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    joystickVector.x = dx / maxRadius;
+    joystickVector.y = -dy / maxRadius;
+  }
+
+  // === منطقة النظر ===
+  const lookArea = document.getElementById('look-area');
+  let lookActive = false;
+  let lookLast = { x: 0, y: 0 };
+
+  lookArea.style.touchAction = 'none';
+
+  lookArea.addEventListener('pointerdown', e => {
+    if (lookActive) return;
+    lookActive = true;
+    lookArea.setPointerCapture(e.pointerId);
+    lookLast.x = e.clientX;
+    lookLast.y = e.clientY;
+    e.preventDefault();
+  });
+
+  lookArea.addEventListener('pointermove', e => {
+    if (!lookActive) return;
+    const dx = e.clientX - lookLast.x;
+    const dy = e.clientY - lookLast.y;
+    yaw -= dx * 0.005;
+    pitch -= dy * 0.005;
+    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+    lookLast.x = e.clientX;
+    lookLast.y = e.clientY;
+    e.preventDefault();
+  });
+
+  const endLook = e => {
+    if (!lookActive) return;
+    lookActive = false;
+    if (lookArea.hasPointerCapture && lookArea.hasPointerCapture(e.pointerId)) {
+      lookArea.releasePointerCapture(e.pointerId);
+    }
+  };
+  lookArea.addEventListener('pointerup', endLook);
+  lookArea.addEventListener('pointercancel', endLook);
+
+  // === زر الإطلاق ===
+  const fireBtn = document.getElementById('fire-btn');
+  let fireActive = false;
+  let fireLast = { x: 0, y: 0 };
+
+  fireBtn.style.touchAction = 'none';
+
+  fireBtn.addEventListener('pointerdown', e => {
+    if (fireActive) return;
+    fireActive = true;
+    fireBtn.setPointerCapture(e.pointerId);
+    fireLast.x = e.clientX;
+    fireLast.y = e.clientY;
+    isFiring = true;
+    fireBtn.classList.add('firing');
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  fireBtn.addEventListener('pointermove', e => {
+    if (!fireActive) return;
+    const dx = e.clientX - fireLast.x;
+    const dy = e.clientY - fireLast.y;
+    yaw -= dx * 0.005;
+    pitch -= dy * 0.005;
+    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+    fireLast.x = e.clientX;
+    fireLast.y = e.clientY;
+    e.preventDefault();
+  });
+
+  const endFire = e => {
+    if (!fireActive) return;
+    fireActive = false;
+    isFiring = false;
+    fireBtn.classList.remove('firing');
+    if (fireBtn.hasPointerCapture && fireBtn.hasPointerCapture(e.pointerId)) {
+      fireBtn.releasePointerCapture(e.pointerId);
+    }
+  };
+  fireBtn.addEventListener('pointerup', endFire);
+  fireBtn.addEventListener('pointercancel', endFire);
+
+  // زر إعادة التعبئة
+  const reloadBtn = document.getElementById('reload-btn');
+  reloadBtn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    reload();
+  });
+
+  // زر القفز
+  const jumpBtn = document.getElementById('jump-btn');
+  jumpBtn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    jump();
+  });
+
+  // === زر PLAY (واجهة البداية) ===
+  document.getElementById('play-btn').addEventListener('click', () => {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('mode-screen').classList.add('show');
+  });
+  document.getElementById('play-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('mode-screen').classList.add('show');
+  });
+
+  // === زر وضع التدريب الحر ===
+  document.getElementById('mode-free').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('mode-screen').classList.remove('show');
+    document.getElementById('controls-info').style.display = 'block';
+    setTimeout(() => {
+      document.getElementById('controls-info').style.display = 'none';
+    }, 5000);
+    gameMode = 'free';
+    // إظهار HUD الفردي، إخفاء HUD الجماعي
+    document.getElementById('hud').style.display = '';
+    document.getElementById('team-ui').classList.remove('show');
+    document.getElementById('player-health-display').classList.remove('show');
+    document.getElementById('player-ammo-display').classList.remove('show');
+    startGame();
+  });
+
+  // === زر وضع اللعب الجماعي ===
+  document.getElementById('mode-multi').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('mode-screen').classList.remove('show');
+    document.getElementById('setup-screen').classList.add('show');
+  });
+
+  // === زر اللعب على الإنترنت (يفتح modal الغرفة) ===
+  document.getElementById('mode-online').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('mode-screen').classList.remove('show');
+    document.getElementById('room-modal').classList.add('show');
+  });
+
+  // === زر إغلاق modal الغرفة ===
+  document.getElementById('room-close-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('room-modal').classList.remove('show');
+    document.getElementById('mode-screen').classList.add('show');
+  });
+
+  // === زر إنشاء غرفة ===
+  document.getElementById('create-room-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    createOnlineRoom();
+  });
+
+  // === زر الانضمام لغرفة ===
+  document.getElementById('join-room-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+    if (code.length < 4) {
+      document.getElementById('room-status').textContent = '⚠ الكود قصير جداً (4 أحرف على الأقل)';
+      return;
+    }
+    joinOnlineRoom(code);
+  });
+
+  // === رجوع من شاشة الأوضاع ===
+  document.getElementById('back-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('mode-screen').classList.remove('show');
+    document.getElementById('start-screen').style.display = 'flex';
+  });
+
+  // === رجوع من شاشة الإعدادات ===
+  document.getElementById('setup-back-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('setup-screen').classList.remove('show');
+    document.getElementById('mode-screen').classList.add('show');
+  });
+
+  // === اختيار حجم الفريق ===
+  let selectedTeamSize = 1;
+  let selectedDifficulty = 'medium';
+  document.querySelectorAll('#team-size-row .option-btn').forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('#team-size-row .option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedTeamSize = parseInt(btn.dataset.size);
+    });
+  });
+
+  // === اختيار الصعوبة ===
+  document.querySelectorAll('#difficulty-row .option-btn').forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('#difficulty-row .option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDifficulty = btn.dataset.diff;
+    });
+  });
+
+  // === زر العب (يبدأ التحميل ثم المباراة) ===
+  document.getElementById('play-game-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('setup-screen').classList.remove('show');
+    startLoadingScreen(selectedTeamSize, selectedDifficulty);
+  });
+
+  // === أزرار نهاية المباراة ===
+  document.getElementById('match-restart-btn').addEventListener('click', () => {
+    location.reload();
+  });
+  document.getElementById('match-menu-btn').addEventListener('click', () => {
+    location.reload();
+  });
+
+  // === زر إعادة المحاولة (وضع التدريب الحر) ===
+  document.getElementById('restart-btn').addEventListener('click', () => {
+    location.reload();
+  });
+
+  // === زر القائمة الرئيسية ===
+  document.getElementById('menu-btn').addEventListener('click', () => {
+    location.reload();
+  });
+
+  // زر الإيقاف
+  document.getElementById('pause-btn').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!gameRunning) {
+      gameRunning = true;
+      document.getElementById('pause-btn').textContent = 'إيقاف';
+    } else {
+      gameRunning = false;
+      document.getElementById('pause-btn').textContent = 'استئناف';
+    }
+  });
+
+  document.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  gameRunning = true;
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+// ============================================================
+//  دوال اللعب عبر الإنترنت (PeerJS)
+// ============================================================
+
+// === إنشاء غرفة جديدة ===
+function createOnlineRoom() {
+  const statusEl = document.getElementById('room-status');
+  statusEl.textContent = 'جاري إنشاء الغرفة...';
+  // توليد كود غرفة عشوائي من 6 أحرف
+  myRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  myPeerId = 'zazawar-' + myRoomCode;
+
+  try {
+    peer = new Peer(myPeerId, { debug: 1 });
+    isRoomHost = true;
+    isOnlineMode = true;
+
+    peer.on('open', (id) => {
+      console.log('Peer opened with id:', id);
+      document.getElementById('room-code-display').textContent = myRoomCode;
+      document.getElementById('room-code-display').style.display = 'block';
+      statusEl.textContent = '✅ الغرفة جاهزة! شارك الكود مع صديقك';
+      statusEl.style.color = '#88dd88';
+    });
+
+    peer.on('connection', (conn) => {
+      console.log('New connection from:', conn.peer);
+      peerConnections[conn.peer] = conn;
+      setupConnectionHandlers(conn);
+    });
+
+    peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      statusEl.textContent = '❌ خطأ: ' + err.type;
+      statusEl.style.color = '#ff8888';
+    });
+  } catch(e) {
+    console.error('Peer creation failed:', e);
+    statusEl.textContent = '❌ فشل إنشاء الغرفة';
+  }
+}
+
+// === الانضمام لغرفة موجودة ===
+function joinOnlineRoom(code) {
+  const statusEl = document.getElementById('room-status');
+  statusEl.textContent = 'جاري الاتصال بالغرفة...';
+  myRoomCode = code;
+  myPeerId = 'zazawar-' + code + '-' + Math.random().toString(36).substring(2, 6);
+
+  try {
+    peer = new Peer(myPeerId, { debug: 1 });
+    isRoomHost = false;
+    isOnlineMode = true;
+
+    peer.on('open', (id) => {
+      console.log('Joiner peer opened, connecting to host:', id);
+      const hostId = 'zazawar-' + code;
+      const conn = peer.connect(hostId, { reliable: false, metadata: { role: 'joiner' } });
+      peerConnections[hostId] = conn;
+      setupConnectionHandlers(conn);
+    });
+
+    peer.on('connection', (conn) => {
+      console.log('New connection from:', conn.peer);
+      peerConnections[conn.peer] = conn;
+      setupConnectionHandlers(conn);
+    });
+
+    peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      statusEl.textContent = '❌ خطأ: ' + err.type + ' (تأكد من الكود)';
+      statusEl.style.color = '#ff8888';
+    });
+  } catch(e) {
+    console.error('Peer creation failed:', e);
+    statusEl.textContent = '❌ فشل الاتصال';
+  }
+}
+
+// === معالجات الاتصال (استقبال الرسائل) ===
+function setupConnectionHandlers(conn) {
+  conn.on('open', () => {
+    console.log('Connection opened with:', conn.peer);
+    document.getElementById('room-status').textContent = '✅ متصل! جاري بدء المباراة...';
+    document.getElementById('room-status').style.color = '#88dd88';
+
+    // تحديد الفريق: المضيف أزرق، الانضمام أحمر (تلقائياً)
+    const myTeam = isRoomHost ? 'blue' : 'red';
+
+    // إرسال بيانات الانضمام
+    conn.send({ type: 'join', team: myTeam, peerId: myPeerId });
+
+    // بدء المباراة (باستخدام نظام اللعب الجماعي)
+    setTimeout(() => {
+      document.getElementById('room-modal').classList.remove('show');
+      gameMode = 'team';
+      teamGame.teamSize = 1;  // 1v1
+      teamGame.difficulty = 'medium';
+      startTeamMatch();
+    }, 1200);
+  });
+
+  conn.on('data', (data) => {
+    handleOnlineMessage(data, conn.peer);
+  });
+
+  conn.on('close', () => {
+    console.log('Connection closed:', conn.peer);
+    delete peerConnections[conn.peer];
+    if (onlinePlayers[conn.peer]) {
+      scene.remove(onlinePlayers[conn.peer].mesh);
+      delete onlinePlayers[conn.peer];
+    }
+  });
+
+  conn.on('error', (err) => {
+    console.error('Connection error:', err);
+  });
+}
+
+// === معالجة رسالة من لاعب آخر ===
+function handleOnlineMessage(data, fromPeerId) {
+  if (!data || !data.type) return;
+  switch (data.type) {
+    case 'join':
+      // لاعب جديد انضم
+      createOnlinePlayerMesh(fromPeerId, data.team);
+      // إرسال بياناتي للتعريف بنفسي
+      if (peerConnections[fromPeerId]) {
+        peerConnections[fromPeerId].send({
+          type: 'join', team: isRoomHost ? 'blue' : 'red', peerId: myPeerId
+        });
+      }
+      break;
+    case 'state':
+      // تحديث موضع لاعب آخر
+      updateOnlinePlayer(fromPeerId, data);
+      break;
+    case 'shoot':
+      // لاعب آخر أطلق - تأثير صوتي فقط
+      playGunshot();
+      // فحص إصابة اللاعب المحلي
+      if (data.hitPeerId === myPeerId || data.targetPeerId === myPeerId) {
+        player.health -= 17;
+        updatePlayerHealthDisplay();
+        const flash = document.getElementById('damage-flash');
+        flash.classList.add('show');
+        setTimeout(() => flash.classList.remove('show'), 300);
+        if (player.health <= 0 && teamGame.matchActive) {
+          teamGame.redScore++;
+          updateTeamUI();
+          player.userData.isDead = true;
+          player.position.set(0, -100, 0);
+          setTimeout(() => {
+            if (teamGame.matchActive) {
+              player.position.set(0, 1.7, isRoomHost ? -35 : 35);
+              player.health = 100;
+              yaw = isRoomHost ? Math.PI : 0;
+              player.userData.isDead = false;
+              updatePlayerHealthDisplay();
+            }
+          }, 5000);
+        }
+      }
+      break;
+    case 'kill':
+      // لاعب آخر مات
+      if (onlinePlayers[fromPeerId]) {
+        onlinePlayers[fromPeerId].mesh.visible = false;
+        onlinePlayers[fromPeerId].isDead = true;
+        setTimeout(() => {
+          if (onlinePlayers[fromPeerId]) {
+            onlinePlayers[fromPeerId].mesh.visible = true;
+            onlinePlayers[fromPeerId].isDead = false;
+            const respawnZ = onlinePlayers[fromPeerId].team === 'blue' ? -35 : 35;
+            onlinePlayers[fromPeerId].mesh.position.set(0, 0, respawnZ);
+          }
+        }, 5000);
+      }
+      break;
+  }
+}
+
+// === إنشاء mesh لاعب آخر (يبدو كبوت) ===
+function createOnlinePlayerMesh(peerId, team) {
+  if (onlinePlayers[peerId]) return;  // موجود بالفعل
+  const isBlue = team === 'blue';
+  const mesh = spawnTeamBot(0, isBlue ? -35 : 35, team);
+  onlinePlayers[peerId] = {
+    mesh: mesh,
+    team: team,
+    isDead: false,
+    lastUpdate: performance.now()
+  };
+}
+
+// === تحديث موضع لاعب آخر ===
+function updateOnlinePlayer(peerId, data) {
+  if (!onlinePlayers[peerId]) {
+    createOnlinePlayerMesh(peerId, data.team);
+  }
+  const op = onlinePlayers[peerId];
+  if (op && op.mesh) {
+    op.mesh.position.x = data.x;
+    op.mesh.position.z = data.z;
+    op.mesh.rotation.y = data.yaw;
+    op.lastUpdate = performance.now();
+  }
+}
+
+// === إرسال حالة اللاعب المحلي للاعبين الآخرين ===
+function syncLocalState() {
+  if (!isOnlineMode || Object.keys(peerConnections).length === 0) return;
+  const now = performance.now();
+  if (now - lastStateSync < STATE_SYNC_INTERVAL) return;
+  lastStateSync = now;
+  const myTeam = isRoomHost ? 'blue' : 'red';
+  const state = {
+    type: 'state',
+    x: player.position.x,
+    z: player.position.z,
+    yaw: yaw,
+    team: myTeam
+  };
+  Object.values(peerConnections).forEach(conn => {
+    if (conn.open) {
+      try { conn.send(state); } catch(e) {}
+    }
+  });
+}
+
+// === إرسال حدث إطلاق للاعبين الآخرين ===
+function syncShootEvent(targetPeerId) {
+  if (!isOnlineMode) return;
+  const shoot = {
+    type: 'shoot',
+    targetPeerId: targetPeerId
+  };
+  Object.values(peerConnections).forEach(conn => {
+    if (conn.open) {
+      try { conn.send(shoot); } catch(e) {}
+    }
+  });
+}
+
+// === إرسال حدث موت للاعبين الآخرين ===
+function syncKillEvent() {
+  if (!isOnlineMode) return;
+  const kill = { type: 'kill' };
+  Object.values(peerConnections).forEach(conn => {
+    if (conn.open) {
+      try { conn.send(kill); } catch(e) {}
+    }
+  });
+}
+
+// === شاشة التحميل قبل الوضع الجماعي ===
+function startLoadingScreen(teamSize, difficulty) {
+  teamGame.teamSize = teamSize;
+  teamGame.difficulty = difficulty;
+  gameMode = 'team';
+  document.getElementById('loading-screen').classList.add('show');
+  let progress = 0;
+  const fillEl = document.getElementById('loading-bar-fill');
+  const pctEl = document.getElementById('loading-percent');
+  const interval = setInterval(() => {
+    progress += 4 + Math.random() * 8;
+    if (progress >= 100) {
+      progress = 100;
+      clearInterval(interval);
+      fillEl.style.width = '100%';
+      pctEl.textContent = '100%';
+      setTimeout(() => {
+        document.getElementById('loading-screen').classList.remove('show');
+        startTeamMatch();
+      }, 400);
+    } else {
+      fillEl.style.width = progress + '%';
+      pctEl.textContent = Math.floor(progress) + '%';
+    }
+  }, 80);
+}
+
+// === بدء مباراة جماعية ===
+// === بناء ساحة الوضع الجماعي (مستطيلة + عوائق + بيوت حماية) ===
+let teamArenaBuilt = false;
+let coverPoints = [];   // نقاط الاختباء للبوتات
+
+function buildTeamArena() {
+  // تنظيف المشهد من الساحة السابقة
+  // (نحتفظ بالسماء والإضاءة والكاميرا - فقط نحذف العناصر المبنية)
+  const toRemove = [];
+  scene.traverse(obj => {
+    if (obj.isMesh || obj.isGroup) {
+      if (obj !== camera && obj !== skyMesh && !obj.parent.isCamera) {
+        // تحقق أنه ليس السلاح (ابن الكاميرا)
+        let p = obj.parent;
+        let isWeapon = false;
+        while (p) {
+          if (p === weaponGroup || p === camera) { isWeapon = true; break; }
+          p = p.parent;
+        }
+        if (!isWeapon && obj !== skyMesh) toRemove.push(obj);
+      }
+    }
+  });
+  toRemove.forEach(obj => {
+    if (obj.parent) obj.parent.remove(obj);
+  });
+  colliders = [];
+  platforms = [];
+  coverPoints = [];
+
+  // === الأرضية - مستطيلة 50x80 (طويلة) ===
+  const groundGeo = new THREE.PlaneGeometry(50, 80);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x3a3a2a, roughness: 0.95 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // خط المنتصف (للجمالية)
+  const midLineMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.3 });
+  const midLine = new THREE.Mesh(new THREE.PlaneGeometry(50, 0.2), midLineMat);
+  midLine.rotation.x = -Math.PI / 2;
+  midLine.position.y = 0.02;
+  scene.add(midLine);
+
+  // === بيت الحماية للفريق الأزرق (في الجهة z = -35) ===
+  buildHomeBase(0, -35, 'blue');
+  // === بيت الحماية للفريق الأحمر (في الجهة z = +35) ===
+  buildHomeBase(0, 35, 'red');
+
+  // === عوائق متوسطة الحجم (جدران للاختباء) - غير قابلة للاختراق ===
+  // عوائق على جانبي المنتصف
+  const coverMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.85, metalness: 0.2 });
+  const coverSpots = [
+    // الجانب الأزرق
+    { x: -8, z: -15, w: 4, h: 2, d: 0.5, rot: 0 },
+    { x: 8, z: -15, w: 4, h: 2, d: 0.5, rot: 0 },
+    { x: -12, z: -8, w: 0.5, h: 2, d: 4, rot: 0 },
+    { x: 12, z: -8, w: 0.5, h: 2, d: 4, rot: 0 },
+    { x: 0, z: -10, w: 6, h: 2, d: 0.5, rot: 0 },
+    // المنتصف
+    { x: -10, z: 0, w: 0.5, h: 2, d: 6, rot: 0 },
+    { x: 10, z: 0, w: 0.5, h: 2, d: 6, rot: 0 },
+    { x: 0, z: 0, w: 2, h: 2.5, d: 2, rot: 0 },  // كتلة وسط
+    // الجانب الأحمر
+    { x: -8, z: 15, w: 4, h: 2, d: 0.5, rot: 0 },
+    { x: 8, z: 15, w: 4, h: 2, d: 0.5, rot: 0 },
+    { x: -12, z: 8, w: 0.5, h: 2, d: 4, rot: 0 },
+    { x: 12, z: 8, w: 0.5, h: 2, d: 4, rot: 0 },
+    { x: 0, z: 10, w: 6, h: 2, d: 0.5, rot: 0 }
+  ];
+  coverSpots.forEach(c => {
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.d), coverMat);
+    cover.position.set(c.x, c.h/2, c.z);
+    cover.castShadow = true;
+    cover.receiveShadow = true;
+    scene.add(cover);
+    colliders.push({
+      minX: c.x - c.w/2, maxX: c.x + c.w/2,
+      minZ: c.z - c.d/2, maxZ: c.z + c.d/2,
+      topY: c.h
+    });
+    // إضافة كنقطة اختباء
+    coverPoints.push({ x: c.x, z: c.z, h: c.h });
+  });
+
+  // === جدران الحدود للمحيط ===
+  const wallH = 15;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
+  const walls = [
+    { x: 25, z: 0, w: 0.5, d: 80 },
+    { x: -25, z: 0, w: 0.5, d: 80 },
+    { x: 0, z: 40, w: 50, d: 0.5 },
+    { x: 0, z: -40, w: 50, d: 0.5 }
+  ];
+  walls.forEach(w => {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w.w, wallH, w.d), wallMat);
+    wall.position.set(w.x, wallH/2, w.z);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+    scene.add(wall);
+    colliders.push({
+      minX: w.x - w.w/2, maxX: w.x + w.w/2,
+      minZ: w.z - w.d/2, maxZ: w.z + w.d/2,
+      topY: wallH
+    });
+  });
+}
+
+// === بناء بيت الحماية الصغير (4 جدران + باب مفتوح نحو العدو) ===
+function buildHomeBase(x, z, team) {
+  const isBlue = team === 'blue';
+  // البيت الصغير: 6x6 وحدات، ارتفاع الجدران 4
+  // الباب مفتوح في الجهة المواجهة للعدو (الأزرق: باب في +z، الأحمر: باب في -z)
+  const baseMat = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x2a4a7a : 0x6a2a2a,
+    roughness: 0.85, metalness: 0.2
+  });
+  const wallH = 4;
+  const halfSize = 3;  // نصف حجم البيت
+  // الباب: عرض 2 وحدة في وسط الجدار الأمامي
+  const doorHalfWidth = 1;
+
+  // الجدار الخلفي ( opposing side from door)
+  const backWallZ = isBlue ? z - halfSize : z + halfSize;
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(6, wallH, 0.4), baseMat);
+  backWall.position.set(x, wallH/2, backWallZ);
+  backWall.castShadow = true; backWall.receiveShadow = true;
+  scene.add(backWall);
+  colliders.push({
+    minX: x - 3, maxX: x + 3,
+    minZ: backWallZ - 0.2, maxZ: backWallZ + 0.2,
+    topY: wallH
+  });
+
+  // الجدار الأيسر
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, wallH, 6), baseMat);
+  leftWall.position.set(x - halfSize, wallH/2, z);
+  leftWall.castShadow = true; leftWall.receiveShadow = true;
+  scene.add(leftWall);
+  colliders.push({
+    minX: x - halfSize - 0.2, maxX: x - halfSize + 0.2,
+    minZ: z - 3, maxZ: z + 3,
+    topY: wallH
+  });
+
+  // الجدار الأيمن
+  const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, wallH, 6), baseMat);
+  rightWall.position.set(x + halfSize, wallH/2, z);
+  rightWall.castShadow = true; rightWall.receiveShadow = true;
+  scene.add(rightWall);
+  colliders.push({
+    minX: x + halfSize - 0.2, maxX: x + halfSize + 0.2,
+    minZ: z - 3, maxZ: z + 3,
+    topY: wallH
+  });
+
+  // الجدار الأمامي (مع الباب) - مقسم لجزئين حول الباب
+  const frontWallZ = isBlue ? z + halfSize : z - halfSize;
+  // الجزء الأيسر من الجدار الأمامي
+  const frontWallL = new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 0.4), baseMat);
+  frontWallL.position.set(x - 2, wallH/2, frontWallZ);
+  frontWallL.castShadow = true; frontWallL.receiveShadow = true;
+  scene.add(frontWallL);
+  colliders.push({
+    minX: x - 3, maxX: x - 1,
+    minZ: frontWallZ - 0.2, maxZ: frontWallZ + 0.2,
+    topY: wallH
+  });
+  // الجزء الأيمن من الجدار الأمامي
+  const frontWallR = new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 0.4), baseMat);
+  frontWallR.position.set(x + 2, wallH/2, frontWallZ);
+  frontWallR.castShadow = true; frontWallR.receiveShadow = true;
+  scene.add(frontWallR);
+  colliders.push({
+    minX: x + 1, maxX: x + 3,
+    minZ: frontWallZ - 0.2, maxZ: frontWallZ + 0.2,
+    topY: wallH
+  });
+
+  // سقف البيت (للجمالية + يحدد أنه بيت)
+  const roofMat = new THREE.MeshStandardMaterial({ color: isBlue ? 0x1a3a5a : 0x4a1a1a, roughness: 0.9 });
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.2, 6.4), roofMat);
+  roof.position.set(x, wallH + 0.1, z);
+  scene.add(roof);
+
+  // علامة الفريق على الأرض (داخل البيت)
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: isBlue ? 0x4488ff : 0xff4422,
+    transparent: true, opacity: 0.5
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.5, 2, 24), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.03, z);
+  scene.add(ring);
+}
+
+function startTeamMatch() {
+  // بناء الساحة الجماعية (مع عوائق وبيوت حماية)
+  buildTeamArena();
+
+  // تنظيف البوتات الحالية
+  enemies.forEach(e => scene.remove(e));
+  enemies = [];
+  teamGame.allies.forEach(a => scene.remove(a));
+  teamGame.allies = [];
+  teamGame.blueScore = 0;
+  teamGame.redScore = 0;
+  teamGame.matchTimeLeft = 300;
+  teamGame.matchActive = true;
+  teamGame.matchEnded = false;
+
+  // إظهار HUD الجماعي وإخفاء HUD الفردي
+  document.getElementById('team-ui').classList.add('show');
+  document.getElementById('hud').style.display = 'none';  // إخفاء النقاط/الذخيرة الفردية
+  document.getElementById('player-health-display').classList.add('show');  // صحة اللاعب يمين أعلى
+  document.getElementById('player-ammo-display').classList.add('show');    // الرصاص يسار أعلى
+  document.getElementById('blue-score').textContent = '0';
+  document.getElementById('red-score').textContent = '0';
+  document.getElementById('timer-display').textContent = '5:00';
+  document.getElementById('timer-display').classList.remove('warn');
+
+  // وضع اللاعب داخل بيت الحماية الأزرق (z = -35) ووجهه نحو العدو (+z)
+  player.position.set(0, 1.7, -35);
+  player.velocity.set(0, 0, 0);
+  player.health = 100;
+  yaw = Math.PI; pitch = 0;  // ينظر نحو +z (جهة العدو)
+  updateHUD();
+
+  // توليد حلفاء الفريق الأزرق (بوتات صديقة) - داخل بيت الحماية
+  for (let i = 0; i < teamGame.teamSize - 1; i++) {
+    const x = (i - (teamGame.teamSize - 2) / 2) * 2;
+    const z = -35;
+    const ally = spawnTeamBot(x, z, 'blue');
+    // وجه الحليف نحو العدو (+z)
+    ally.rotation.y = 0;
+    teamGame.allies.push(ally);
+  }
+
+  // توليد بوتات الفريق الأحمر (الأعداء) - بعيدة في الجهة المعاكسة (داخل بيت الأحمر)
+  for (let i = 0; i < teamGame.teamSize; i++) {
+    const x = (i - (teamGame.teamSize - 1) / 2) * 2;
+    const z = 35;
+    const enemy = spawnTeamBot(x, z, 'red');
+    // وجه العدو نحو اللاعب (-z)
+    enemy.rotation.y = Math.PI;
+    enemies.push(enemy);
+  }
+
+  // بدء اللعبة
+  gameRunning = true;
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+// === توليد بوت فريق (أزرق أو أحمر) ===
+function spawnTeamBot(x, z, team) {
+  // إعادة استخدام spawnEnemy لكن مع تعديل اللون
+  const enemy = new THREE.Group();
+
+  // اللون حسب الفريق: أزرق للفريق الأزرق، أسود/رمادي داكن للفريق الأحمر
+  const isBlue = team === 'blue';
+  const metalBody = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x2a4a8a : 0x2a2a2a,
+    metalness: 0.85, roughness: 0.35
+  });
+  const metalDark = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x1a2a5a : 0x1a1a1a,
+    metalness: 0.9, roughness: 0.25
+  });
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x44aaff : 0xff4422,
+    metalness: 0.8, roughness: 0.4
+  });
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x44aaff : 0xff2222,
+    emissive: isBlue ? 0x1188ff : 0xff0000,
+    emissiveIntensity: 1.5
+  });
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: isBlue ? 0x44aaff : 0xff4400,
+    emissive: isBlue ? 0x0088ff : 0xff4400,
+    emissiveIntensity: 1.2
+  });
+
+  // الصدر
+  const torsoGroup = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), metalBody);
+  torso.position.y = 1.1; torso.castShadow = true;
+  torsoGroup.add(torso);
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.1), metalDark);
+  chestPlate.position.set(0, 1.5, 0.25); chestPlate.castShadow = true;
+  torsoGroup.add(chestPlate);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), coreMat);
+  core.position.set(0, 1.2, 0.28);
+  torsoGroup.add(core);
+  const coreRing = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.02, 4, 12), accentMat);
+  coreRing.position.set(0, 1.2, 0.28);
+  torsoGroup.add(coreRing);
+  enemy.add(torsoGroup);
+
+  // الرأس
+  const headGroup = new THREE.Group();
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), metalBody);
+  head.castShadow = true;
+  headGroup.add(head);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.05), eyeMat);
+  visor.position.set(0, 0.05, 0.25);
+  headGroup.add(visor);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 6), metalDark);
+  antenna.position.set(0.2, 0.4, 0); antenna.rotation.z = -0.3;
+  headGroup.add(antenna);
+  const antennaBall = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), accentMat);
+  antennaBall.position.set(0.27, 0.6, 0);
+  headGroup.add(antennaBall);
+  const ventL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.1), metalDark);
+  ventL.position.set(-0.27, 0, 0);
+  headGroup.add(ventL);
+  const ventR = ventL.clone(); ventR.position.x = 0.27;
+  headGroup.add(ventR);
+  headGroup.position.y = 1.9;
+  enemy.add(headGroup);
+
+  // الأذرع (مع سلاح بسيط في اليد اليمنى)
+  const armLGroup = new THREE.Group();
+  const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), metalDark);
+  shoulderL.castShadow = true; armLGroup.add(shoulderL);
+  const upperArmL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.22), metalBody);
+  upperArmL.position.y = -0.3; upperArmL.castShadow = true; armLGroup.add(upperArmL);
+  const elbowL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), metalDark);
+  elbowL.position.y = -0.55; armLGroup.add(elbowL);
+  const forearmL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.45, 0.2), metalBody);
+  forearmL.position.y = -0.8; forearmL.castShadow = true; armLGroup.add(forearmL);
+  armLGroup.position.set(-0.5, 1.5, 0);
+  enemy.add(armLGroup);
+
+  // ذراع يمين مع سلاح
+  const armRGroup = new THREE.Group();
+  const shoulderR = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), metalDark);
+  shoulderR.castShadow = true; armRGroup.add(shoulderR);
+  const upperArmR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.22), metalBody);
+  upperArmR.position.y = -0.3; upperArmR.castShadow = true; armRGroup.add(upperArmR);
+  const elbowR = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), metalDark);
+  elbowR.position.y = -0.55; armRGroup.add(elbowR);
+  const forearmR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.45, 0.2), metalBody);
+  forearmR.position.y = -0.8; forearmR.castShadow = true; armRGroup.add(forearmR);
+  // سلاح واضح في اليد اليمنى (جسم + ماسورة)
+  const gunMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.85, roughness: 0.3 });
+  const gunBodyColor = isBlue ? 0x2a4a7a : 0x4a2a2a;
+  const gunColorMat = new THREE.MeshStandardMaterial({ color: gunBodyColor, metalness: 0.6, roughness: 0.4 });
+  // جسم السلاح
+  const botGunBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.35), gunColorMat);
+  botGunBody.position.set(0, -1.0, -0.15);
+  armRGroup.add(botGunBody);
+  // ماسورة السلاح
+  const botGunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 8), gunMat);
+  botGunBarrel.rotation.x = Math.PI / 2;
+  botGunBarrel.position.set(0, -1.0, -0.45);
+  armRGroup.add(botGunBarrel);
+  // مخزن السلاح
+  const botGunMag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.06), gunMat);
+  botGunMag.position.set(0, -1.1, -0.1);
+  armRGroup.add(botGunMag);
+  armRGroup.position.set(0.5, 1.5, 0);
+  enemy.add(armRGroup);
+
+  // الأرجل
+  const legLGroup = new THREE.Group();
+  const hipL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), metalDark);
+  hipL.castShadow = true; legLGroup.add(hipL);
+  const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.26), metalBody);
+  thighL.position.y = -0.3; thighL.castShadow = true; legLGroup.add(thighL);
+  const kneeL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), metalDark);
+  kneeL.position.y = -0.55; legLGroup.add(kneeL);
+  const shinL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), metalBody);
+  shinL.position.y = -0.8; shinL.castShadow = true; legLGroup.add(shinL);
+  const footL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.4), metalDark);
+  footL.position.set(0, -1.1, 0.05); footL.castShadow = true; legLGroup.add(footL);
+  legLGroup.position.set(-0.2, 0.8, 0);
+  enemy.add(legLGroup);
+  const legRGroup = legLGroup.clone();
+  legRGroup.position.x = 0.2;
+  enemy.add(legRGroup);
+
+  enemy.position.set(x, 0, z);
+  // العدو يواجه اللاعب (الأعداء الحمر تواجه -z، الحلفاء الزرق تواجه +z)
+  enemy.rotation.y = isBlue ? 0 : Math.PI;
+
+  enemy.userData = {
+    health: 100,
+    isEnemy: true,
+    isBot: true,
+    team: team,
+    lastAttack: 0,
+    lastShot: 0,
+    body: torso,
+    head: head,
+    legL: legLGroup,
+    legR: legRGroup,
+    walkT: Math.random() * Math.PI * 2,
+    // إعدادات الذكاء حسب الصعوبة
+    speed: 1.2 + Math.random() * 0.8,
+    fireRate: teamGame.difficulty === 'easy' ? 1800 : teamGame.difficulty === 'medium' ? 1200 : 700,
+    accuracy: teamGame.difficulty === 'easy' ? 0.25 : teamGame.difficulty === 'medium' ? 0.55 : 0.85,
+    reactionTime: teamGame.difficulty === 'easy' ? 1.5 : teamGame.difficulty === 'medium' ? 0.8 : 0.3,
+    lastTargetCheck: 0,
+    target: null,
+    respawnTime: 0,
+    isDead: false
+  };
+
+  // تهيئة متغيرات الذكاء للحركة
+  enemy.userData.takingCover = false;
+  enemy.userData.coverTarget = null;
+  enemy.userData.strafeDir = Math.random() > 0.5 ? 1 : -1;
+  enemy.userData.lastStrafeChange = 0;
+  enemy.userData.lastJump = 0;
+  enemy.userData.botVelocityY = 0;
+  enemy.userData.onGround = true;
+
+  scene.add(enemy);
+  return enemy;
+}
+
+// === تحديث بوتات الفريقين ===
+function updateTeamBots(dt) {
+  if (!teamGame.matchActive) return;
+  const now = performance.now();
+
+  // تحديث البوتات الحمراء (أعداء)
+  enemies.forEach(enemy => {
+    if (enemy.userData.team !== 'red') return;
+    updateBotAI(enemy, dt, now, 'blue');
+  });
+  // تحديث البوتات الزرقاء (حلفاء)
+  teamGame.allies.forEach(ally => {
+    updateBotAI(ally, dt, now, 'red');
+  });
+
+  // مؤقت المباراة
+  teamGame.matchTimeLeft -= dt;
+  if (teamGame.matchTimeLeft <= 0) {
+    teamGame.matchTimeLeft = 0;
+    endTeamMatch();
+  }
+  updateTeamUI();
+}
+
+// === ذكاء البوت الاصطناعي ===
+// === ذكاء البوت المتقدم: تركض، تطلق من بعيد، تختبئ، تقفز ===
+function updateBotAI(bot, dt, now, enemyTeam) {
+  const ud = bot.userData;
+  // === حالة الموت: يختفي نهائياً ويُعاد إحياؤه بعد 5 ثوانٍ ===
+  if (ud.health <= 0) {
+    if (ud.respawnTime === 0) {
+      ud.respawnTime = now + 5000;  // 5 ثواني تهدئة
+      bot.visible = false;  // يختفي نهائياً
+      // تعطيل الإصابات عليه
+      ud.isDead = true;
+    }
+    if (now >= ud.respawnTime) {
+      // إعادة الإحياء في بيت الفريق
+      ud.health = 100;
+      ud.isDead = false;
+      bot.visible = true;
+      ud.respawnTime = 0;
+      const isBlue = ud.team === 'blue';
+      bot.position.set(
+        (Math.random() - 0.5) * 4,
+        0,
+        isBlue ? -35 : 35
+      );
+      bot.rotation.y = isBlue ? 0 : Math.PI;  // يواجه العدو
+      ud.takingCover = false;
+      ud.coverTarget = null;
+      ud.target = null;
+      ud.lastTargetCheck = 0;
+      ud.botVelocityY = 0;
+      ud.onGround = true;
+    }
+    return;  // لا يحرك شيئاً وهو ميت
+  }
+
+  // تهيئة متغيرات الحالة
+  if (ud.takingCover === undefined) {
+    ud.takingCover = false;
+    ud.coverTarget = null;
+    ud.strafeDir = Math.random() > 0.5 ? 1 : -1;
+    ud.lastStrafeChange = 0;
+    ud.lastJump = 0;
+    ud.botVelocityY = 0;
+    ud.onGround = true;
+  }
+
+  // العثور على أقرب هدف حي (بشكل دوري)
+  if (!ud.target || now - ud.lastTargetCheck > 600 || (ud.target.userData && (ud.target.userData.health <= 0 || ud.target.userData.isDead))) {
+    ud.lastTargetCheck = now;
+    ud.target = findNearestTarget(bot, enemyTeam);
+  }
+
+  // === قرار الاختباء: فقط عندما تكون الصحة منخفضة جداً ===
+  if (ud.health < 25 && !ud.takingCover && coverPoints.length > 0) {
+    let nearestCover = null;
+    let nearestDist = Infinity;
+    coverPoints.forEach(cp => {
+      const dx = cp.x - bot.position.x;
+      const dz = cp.z - bot.position.z;
+      const d = dx*dx + dz*dz;
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestCover = cp;
+      }
+    });
+    if (nearestCover) {
+      ud.takingCover = true;
+      ud.coverTarget = nearestCover;
+      ud.coverStartTime = now;
+    }
+  }
+
+  // === حالة الاختباء - قصيرة (تعافي ثم عودة للهجوم) ===
+  if (ud.takingCover && ud.coverTarget) {
+    const cx = ud.coverTarget.x;
+    const cz = ud.coverTarget.z;
+    const dx = cx - bot.position.x;
+    const dz = cz - bot.position.z;
+    const distToCover = Math.sqrt(dx*dx + dz*dz);
+
+    if (distToCover > 1.5) {
+      const mx = (dx / distToCover) * ud.speed * 1.4 * dt;
+      const mz = (dz / distToCover) * ud.speed * 1.4 * dt;
+      if (!checkCollision(bot.position.x + mx, bot.position.z)) bot.position.x += mx;
+      if (!checkCollision(bot.position.x, bot.position.z + mz)) bot.position.z += mz;
+      ud.walkT += dt * 12;
+      const swing = Math.sin(ud.walkT) * 0.7;
+      if (ud.legL) ud.legL.rotation.x = swing;
+      if (ud.legR) ud.legR.rotation.x = -swing;
+    } else {
+      // وصل لنقطة الاختباء - يتعافى ثم يعود للقتال بسرعة
+      if (ud.health >= 50 || now - ud.coverStartTime > 2500) {
+        ud.takingCover = false;
+        ud.coverTarget = null;
+      }
+      // أطلق على الهدف أثناء الاختباء
+      if (ud.target && now - ud.lastShot > ud.fireRate) {
+        const tdx = ud.target.position.x - bot.position.x;
+        const tdz = ud.target.position.z - bot.position.z;
+        const tdist = Math.sqrt(tdx*tdx + tdz*tdz);
+        if (tdist < 25) {
+          bot.rotation.y = Math.atan2(tdx, tdz);
+          ud.lastShot = now;
+          botShoot(bot, ud.target, ud.accuracy);
+        }
+      }
+    }
+  }
+  // === حالة الهجوم النشط (معظم الوقت) ===
+  else if (ud.target) {
+    const dx = ud.target.position.x - bot.position.x;
+    const dz = ud.target.position.z - bot.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+
+    // مواجهة الهدف دائماً
+    bot.rotation.y = Math.atan2(dx, dz);
+
+    // === الإطلاق من بعيد (نطاق 35 وحدة) - بمجرد رؤية الهدف ===
+    if (dist < 35 && now - ud.lastShot > ud.fireRate) {
+      ud.lastShot = now;
+      botShoot(bot, ud.target, ud.accuracy);
+    }
+
+    // === الحركة الذكية: ===
+    // - إذا كان بعيداً جداً (>15)، يركض نحوه بسرعة
+    // - في النطاق 8-15، يتحرك جانبياً مع الاقتراب البطيء
+    // - إذا كان قريباً جداً (<8)، يتراجع قليلاً لإبقاء مسافة
+    let moveX = 0, moveZ = 0;
+    if (dist > 15) {
+      // ركض نحو الهدف بسرعة
+      moveX = (dx / dist) * ud.speed * 1.2 * dt;
+      moveZ = (dz / dist) * ud.speed * 1.2 * dt;
+    } else if (dist < 8) {
+      // تراجع قليلاً
+      moveX = -(dx / dist) * ud.speed * 0.8 * dt;
+      moveZ = -(dz / dist) * ud.speed * 0.8 * dt;
+    } else {
+      // نطاق متوسط: حركة جانبية (strafe) + اقتراب بطيء
+      if (now - ud.lastStrafeChange > 1500) {
+        ud.strafeDir = -ud.strafeDir;
+        ud.lastStrafeChange = now;
+      }
+      moveX = (-dz / dist) * ud.speed * 0.9 * ud.strafeDir * dt;
+      moveZ = (dx / dist) * ud.speed * 0.9 * ud.strafeDir * dt;
+    }
+
+    // تطبيق الحركة مع فحص التصادم
+    if (!checkCollision(bot.position.x + moveX, bot.position.z)) {
+      bot.position.x += moveX;
+    }
+    if (!checkCollision(bot.position.x, bot.position.z + moveZ)) {
+      bot.position.z += moveZ;
+    }
+
+    // === القفز العشوائي (لتجنب الإصابة) ===
+    if (ud.onGround && now - ud.lastJump > 2000 + Math.random() * 1500) {
+      ud.botVelocityY = 5;
+      ud.onGround = false;
+      ud.lastJump = now;
+    }
+
+    // أنيميشن الجري السريع
+    ud.walkT += dt * 10;
+    const swing = Math.sin(ud.walkT) * 0.7;
+    if (ud.legL) ud.legL.rotation.x = swing;
+    if (ud.legR) ud.legR.rotation.x = -swing;
+  } else {
+    // لا يوجد هدف - تحرك نحو المنتصف بحثاً عن أعداء
+    const midZ = ud.team === 'blue' ? -10 : 10;
+    const dz = midZ - bot.position.z;
+    if (Math.abs(dz) > 1) {
+      const mz = Math.sign(dz) * ud.speed * 0.8 * dt;
+      if (!checkCollision(bot.position.x, bot.position.z + mz)) bot.position.z += mz;
+    }
+    ud.walkT += dt * 8;
+    const swing = Math.sin(ud.walkT) * 0.5;
+    if (ud.legL) ud.legL.rotation.x = swing;
+    if (ud.legR) ud.legR.rotation.x = -swing;
+  }
+
+  // === الجاذبية والقفز ===
+  if (!ud.onGround) {
+    ud.botVelocityY -= 16 * dt;
+    bot.position.y += ud.botVelocityY * dt;
+    if (bot.position.y <= 0) {
+      bot.position.y = 0;
+      ud.botVelocityY = 0;
+      ud.onGround = true;
+    }
+  }
+
+  // الحدود (الساحة المستطيلة 50x80)
+  bot.position.x = Math.max(-24, Math.min(24, bot.position.x));
+  bot.position.z = Math.max(-39, Math.min(39, bot.position.z));
+}
+
+// === العثور على أقرب هدف حي للبوت ===
+function findNearestTarget(bot, enemyTeam) {
+  let nearest = null;
+  let nearestDist = Infinity;
+  const checkList = enemyTeam === 'blue' ? teamGame.allies.concat([player]) : enemies;
+  checkList.forEach(target => {
+    if (target === bot) return;
+    // تخطي الأهداف الميتة (لا يمكن إصابتها)
+    if (target.userData && target.userData.isDead) return;
+    if (target.userData && target.userData.health !== undefined && target.userData.health <= 0) return;
+    // تخطي اللاعب إذا كان هدف حلفاء الزرق
+    if (target === player && enemyTeam === 'blue') return;
+    const dx = target.position.x - bot.position.x;
+    const dz = target.position.z - bot.position.z;
+    const dist = dx*dx + dz*dz;
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = target;
+    }
+  });
+  return nearest;
+}
+
+// === إطلاق البوت: كل قتل = نقطة واحدة (ليس لكل إصابة) ===
+function botShoot(bot, target, accuracy) {
+  // تخطي الأهداف الميتة (لا يمكن إصابتها أو احتساب نقاط إضافية)
+  if (target.userData && (target.userData.isDead || target.userData.health <= 0)) return;
+
+  playGunshot();
+  // فحص الإصابة بناءً على الدقة
+  if (Math.random() < accuracy) {
+    if (target === player) {
+      player.health -= 17;  // يموت بعد 6 طلقات (6*17=102)
+      updatePlayerHealthDisplay();
+      const flash = document.getElementById('damage-flash');
+      flash.classList.add('show');
+      setTimeout(() => flash.classList.remove('show'), 300);
+      if (player.health <= 0) {
+        // اللاعب مات - نقطة واحدة للفريق الأحمر (كل قتل = نقطة)
+        teamGame.redScore++;
+        updateTeamUI();
+        // إعادة الإحياء بعد 5 ثواني في بيت الفريق
+        player.position.set(0, -100, 0);  // إخفاء اللاعب مؤقتاً (خارج الرؤية)
+        player.userData = player.userData || {};
+        player.userData.isDead = true;
+        setTimeout(() => {
+          if (teamGame.matchActive) {
+            player.position.set(0, 1.7, -35);  // داخل بيت الحماية الأزرق
+            player.health = 100;
+            yaw = Math.PI;  // يواجه العدو
+            if (player.userData) player.userData.isDead = false;
+            updatePlayerHealthDisplay();
+          }
+        }, 5000);
+        player.health = 0;
+      }
+    } else {
+      // بوت أصيب - يقلل صحته فقط
+      target.userData.health -= 35;
+      // وميض أحمر عند الإصابة
+      const origColor = target.userData.body.material.emissive.getHex();
+      const origIntensity = target.userData.body.material.emissiveIntensity;
+      target.userData.body.material.emissive.setHex(0xffffff);
+      target.userData.body.material.emissiveIntensity = 0.8;
+      setTimeout(() => {
+        if (target.userData.body && target.userData.body.material) {
+          target.userData.body.material.emissive.setHex(origColor);
+          target.userData.body.material.emissiveIntensity = origIntensity;
+        }
+      }, 80);
+
+      // عند الموت فقط تحتسب النقطة (كل قتل = نقطة واحدة)
+      if (target.userData.health <= 0) {
+        if (target.userData.team === 'blue') {
+          teamGame.redScore++;
+        } else if (target.userData.team === 'red') {
+          teamGame.blueScore++;
+        }
+        // يختفي نهائياً - يُعاد إحياؤه في updateBotAI بعد 5 ثوانٍ
+        target.userData.health = 0;
+        target.userData.isDead = true;
+        target.visible = false;
+        target.userData.respawnTime = 0;
+        updateTeamUI();
+      }
+    }
+  }
+}
+
+// === تحديث واجهة النقاط والمؤقت ===
+function updateTeamUI() {
+  document.getElementById('blue-score').textContent = teamGame.blueScore;
+  document.getElementById('red-score').textContent = teamGame.redScore;
+  const mins = Math.floor(teamGame.matchTimeLeft / 60);
+  const secs = Math.floor(teamGame.matchTimeLeft % 60);
+  const timerEl = document.getElementById('timer-display');
+  timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+  if (teamGame.matchTimeLeft <= 30) {
+    timerEl.classList.add('warn');
+  }
+}
+
+// === نهاية المباراة ===
+function endTeamMatch() {
+  teamGame.matchActive = false;
+  teamGame.matchEnded = true;
+  gameRunning = false;
+  const titleEl = document.getElementById('match-result-title');
+  const scoresEl = document.getElementById('match-final-scores');
+  let result;
+  if (teamGame.blueScore > teamGame.redScore) {
+    result = 'victory';
+    titleEl.textContent = 'النصر! 🏆';
+    titleEl.className = 'victory';
+  } else if (teamGame.blueScore < teamGame.redScore) {
+    result = 'defeat';
+    titleEl.textContent = 'الهزيمة';
+    titleEl.className = 'defeat';
+  } else {
+    result = 'draw';
+    titleEl.textContent = 'تعادل';
+    titleEl.className = 'draw';
+  }
+  scoresEl.innerHTML = '<span class="blue">الأزرق: ' + teamGame.blueScore + '</span> &nbsp;—&nbsp; <span class="red">الأحمر: ' + teamGame.redScore + '</span>';
+  document.getElementById('team-ui').classList.remove('show');
+  document.getElementById('player-health-display').classList.remove('show');
+  document.getElementById('player-ammo-display').classList.remove('show');
+  document.getElementById('match-end-screen').classList.add('show');
+}
+
+function jump() {
+  if (player.onGround && gameRunning) {
+    player.velocity.y = 7.2;  // رفعناها من 6.2 لـ 7.2 لقفزة أعلى
+    player.onGround = false;
+  }
+}
+
+function reload() {
+  if (isReloading || ammo >= magSize || reserveAmmo <= 0 || !gameRunning) return;
+  isReloading = true;
+  reloadAnimActive = true;
+  reloadAnimT = 0;
+  document.getElementById('reload-indicator').classList.add('show');
+  playReloadSound();
+  setTimeout(() => {
+    const needed = magSize - ammo;
+    const taken = Math.min(needed, reserveAmmo);
+    ammo += taken;
+    reserveAmmo -= taken;
+    isReloading = false;
+    document.getElementById('reload-indicator').classList.remove('show');
+    setTimeout(() => { reloadAnimActive = false; }, 300);
+  }, 1500);
+}
+
+function shoot() {
+  const now = performance.now();
+  if (now - lastShotTime < fireRate) return;
+  if (isReloading) return;
+  if (ammo <= 0) {
+    reload();
+    return;
+  }
+
+  lastShotTime = now;
+  ammo--;
+  updateHUD();
+
+  // تحديث اتجاه الكاميرا فوراً
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+  camera.updateMatrixWorld();
+
+  // ارتداد السلاح
+  weaponGroup.position.z = -0.48;
+  weaponGroup.rotation.x = 0.05;
+  setTimeout(() => {
+    weaponGroup.position.z = -0.55;
+    weaponGroup.rotation.x = 0;
+  }, 45);
+
+  // وميض الفوهة
+  muzzleFlashMesh.material.opacity = 1;
+  muzzleFlashMesh.scale.set(1 + Math.random() * 0.4, 1 + Math.random() * 0.4, 1);
+  muzzleFlashLight.intensity = 2.5;
+  muzzleFlashTimer = 0.05;
+
+  // وميض الشاشة
+  const flashOverlay = document.getElementById('muzzle-flash');
+  flashOverlay.classList.remove('show');
+  void flashOverlay.offsetWidth;
+  flashOverlay.classList.add('show');
+
+  playGunshot();
+
+  // كشف الإصابة
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+  const targets = [];
+  enemies.forEach(e => {
+    e.traverse(child => {
+      if (child.isMesh) targets.push(child);
+    });
+  });
+
+  const intersects = raycaster.intersectObjects(targets, false);
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    let enemyObj = hit.object;
+    while (enemyObj && !enemyObj.userData.isEnemy) {
+      enemyObj = enemyObj.parent;
+    }
+    if (enemyObj) {
+      // تخطي البوتات الميتة (لا يمكن إصابتها أو احتساب نقاط إضافية)
+      if (enemyObj.userData.isDead || enemyObj.userData.health <= 0) {
+        return;
+      }
+      const isHead = hit.object === enemyObj.userData.head;
+      const damage = isHead ? 100 : 35;
+      enemyObj.userData.health -= damage;
+
+      const hm = document.getElementById('hit-marker');
+      hm.classList.remove('show');
+      void hm.offsetWidth;
+      hm.classList.add('show');
+
+      const origColor = hit.object.material.emissive.getHex();
+      const origIntensity = hit.object.material.emissiveIntensity;
+      hit.object.material.emissive.setHex(0xffffff);
+      hit.object.material.emissiveIntensity = 0.9;
+      setTimeout(() => {
+        if (hit.object.material) {
+          hit.object.material.emissive.setHex(origColor);
+          hit.object.material.emissiveIntensity = origIntensity;
+        }
+      }, 80);
+
+      if (enemyObj.userData.health <= 0) {
+        if (gameMode === 'team') {
+          // في الوضع الجماعي: عند قتل بوت أحمر، نقطة للفريق الأزرق فقط
+          if (enemyObj.userData.team === 'red') {
+            teamGame.blueScore++;
+            updateTeamUI();
+            // يختفي نهائياً - يُعاد إحياؤه بعد 5 ثوانٍ في updateBotAI
+            enemyObj.userData.health = 0;
+            enemyObj.userData.isDead = true;
+            enemyObj.visible = false;
+            enemyObj.userData.respawnTime = 0;
+            // في الوضع أونلاين، أرسل حدث القتل للاعبين الآخرين
+            if (isOnlineMode) syncKillEvent();
+          }
+        } else {
+          // وضع التدريب الحر: حذف البوت وتوليد بديل
+          scene.remove(enemyObj);
+          enemies = enemies.filter(e => e !== enemyObj);
+          score += isHead ? 15 : 10;
+          updateHUD();
+          setTimeout(() => { if (gameRunning) spawnEnemy(); }, 1800);
+        }
+      }
+    }
+  }
+}
+
+// === صوت رصاص محسّن (crack + boom + noise) ===
+function playGunshot() {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const sr = audioCtx.sampleRate;
+
+    // ====== الطبقة 1: الـ Crack (الفرقعة الأولى) ======
+    // ضوضاء بيضاء بهجوم فوري (0ms attack) وانهيار سريع
+    const crackBuf = audioCtx.createBuffer(1, Math.floor(sr * 0.08), sr);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackData.length; i++) {
+      // هبوط خطّي حاد (أكثر واقعية من أسي)
+      const env = Math.max(0, 1 - i / crackData.length);
+      // قيمة عالية في البداية ثم انهيار سريع
+      crackData[i] = (Math.random() * 2 - 1) * env * Math.pow(env, 0.5);
+    }
+    const crack = audioCtx.createBufferSource();
+    crack.buffer = crackBuf;
+    // فلتر bandpass للتركيز على ترددات الفرقعة (2kHz-5kHz)
+    const crackBP = audioCtx.createBiquadFilter();
+    crackBP.type = 'bandpass';
+    crackBP.frequency.value = 3000;
+    crackBP.Q.value = 0.8;
+    const crackGain = audioCtx.createGain();
+    crackGain.gain.setValueAtTime(1.2, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    crack.connect(crackBP);
+    crackBP.connect(crackGain);
+    crackGain.connect(audioCtx.destination);
+    crack.start(now);
+    crack.stop(now + 0.08);
+
+    // ====== الطبقة 2: جسم الصوت (الـ Boom) ======
+    // ضوضاء منخفضة مع فلتر تمرير منخفض ينحدر تدريجياً
+    const boomBuf = audioCtx.createBuffer(1, Math.floor(sr * 0.35), sr);
+    const boomData = boomBuf.getChannelData(0);
+    for (let i = 0; i < boomData.length; i++) {
+      // هبوط بطيء (exponential decay)
+      const env = Math.pow(1 - i / boomData.length, 1.2);
+      boomData[i] = (Math.random() * 2 - 1) * env;
+    }
+    const boom = audioCtx.createBufferSource();
+    boom.buffer = boomBuf;
+    const boomLP = audioCtx.createBiquadFilter();
+    boomLP.type = 'lowpass';
+    boomLP.frequency.setValueAtTime(2000, now);  // يبدأ واسعاً
+    boomLP.frequency.exponentialRampToValueAtTime(150, now + 0.3);  // ينحدر للأسفل
+    boomLP.Q.value = 0.7;
+    const boomGain = audioCtx.createGain();
+    boomGain.gain.setValueAtTime(1.0, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    boom.connect(boomLP);
+    boomLP.connect(boomGain);
+    boomGain.connect(audioCtx.destination);
+    boom.start(now);
+    boom.stop(now + 0.35);
+
+    // ====== الطبقة 3: Sub-bass (للإحساس بالـ punch في الصدر) ======
+    // موجة جيبية من 120Hz تنحدر لـ 30Hz
+    const sub = audioCtx.createOscillator();
+    const subGain = audioCtx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(120, now);
+    sub.frequency.exponentialRampToValueAtTime(30, now + 0.15);
+    subGain.gain.setValueAtTime(0.9, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    sub.connect(subGain);
+    subGain.connect(audioCtx.destination);
+    sub.start(now);
+    sub.stop(now + 0.22);
+
+    // ====== الطبقة 4: الضغطة (الـ Punch) ======
+    // موجة مربعة قصيرة تضيف "ضربة" قوية
+    const punch = audioCtx.createOscillator();
+    const punchGain = audioCtx.createGain();
+    const punchLP = audioCtx.createBiquadFilter();
+    punch.type = 'sawtooth';
+    punch.frequency.setValueAtTime(180, now);
+    punch.frequency.exponentialRampToValueAtTime(50, now + 0.08);
+    punchLP.type = 'lowpass';
+    punchLP.frequency.value = 500;
+    punchGain.gain.setValueAtTime(0.5, now);
+    punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    punch.connect(punchLP);
+    punchLP.connect(punchGain);
+    punchGain.connect(audioCtx.destination);
+    punch.start(now);
+    punch.stop(now + 0.1);
+
+    // ====== الطبقة 5: الذيل/الصدى (Tail/Reverb) ======
+    // صدى طويل يبدأ بعد الفرقعة مباشرة، يحاكي البيئة المحيطة
+    const tailBuf = audioCtx.createBuffer(1, Math.floor(sr * 0.5), sr);
+    const tailData = tailBuf.getChannelData(0);
+    for (let i = 0; i < tailData.length; i++) {
+      // هبوط طويل بطيء (exponential)
+      const env = Math.pow(1 - i / tailData.length, 2);
+      // تأخير بسيط في البداية
+      const delay = Math.max(0, (i - sr * 0.02) / sr);
+      const delayEnv = delay > 0 ? Math.exp(-delay * 2) : 0;
+      tailData[i] = (Math.random() * 2 - 1) * env * delayEnv * 0.5;
+    }
+    const tail = audioCtx.createBufferSource();
+    tail.buffer = tailBuf;
+    const tailBP = audioCtx.createBiquadFilter();
+    tailBP.type = 'bandpass';
+    tailBP.frequency.value = 1200;  // صدى متوسط-منخفض
+    tailBP.Q.value = 0.3;
+    const tailGain = audioCtx.createGain();
+    tailGain.gain.setValueAtTime(0, now);
+    tailGain.gain.linearRampToValueAtTime(0.4, now + 0.02);  // يبدأ بعد الـ crack
+    tailGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    tail.connect(tailBP);
+    tailBP.connect(tailGain);
+    tailGain.connect(audioCtx.destination);
+    tail.start(now);
+    tail.stop(now + 0.5);
+  } catch(e) {}
+}
+
+// === صوت إعادة التلقيم ===
+function playReloadSound() {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+
+    // 1) صوت سقوط المخزن (نقرة معدنية)
+    const click1 = audioCtx.createOscillator();
+    const click1Gain = audioCtx.createGain();
+    click1.type = 'square';
+    click1.frequency.setValueAtTime(800, now);
+    click1.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+    click1Gain.gain.setValueAtTime(0.15, now);
+    click1Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    click1.connect(click1Gain);
+    click1Gain.connect(audioCtx.destination);
+    click1.start(now);
+    click1.stop(now + 0.08);
+
+    // 2) صوت إدخال المخزن الجديد (نقرة أعلى)
+    const t2 = now + 0.7;
+    const click2 = audioCtx.createOscillator();
+    const click2Gain = audioCtx.createGain();
+    click2.type = 'square';
+    click2.frequency.setValueAtTime(1200, t2);
+    click2.frequency.exponentialRampToValueAtTime(400, t2 + 0.04);
+    click2Gain.gain.setValueAtTime(0.2, t2);
+    click2Gain.gain.exponentialRampToValueAtTime(0.001, t2 + 0.05);
+    click2.connect(click2Gain);
+    click2Gain.connect(audioCtx.destination);
+    click2.start(t2);
+    click2.stop(t2 + 0.07);
+
+    // 3) صوت سحب مقبض الشحن (في النهاية)
+    const t3 = now + 1.1;
+    const click3 = audioCtx.createOscillator();
+    const click3Gain = audioCtx.createGain();
+    click3.type = 'sawtooth';
+    click3.frequency.setValueAtTime(150, t3);
+    click3.frequency.exponentialRampToValueAtTime(80, t3 + 0.1);
+    click3Gain.gain.setValueAtTime(0.25, t3);
+    click3Gain.gain.exponentialRampToValueAtTime(0.001, t3 + 0.15);
+    click3.connect(click3Gain);
+    click3Gain.connect(audioCtx.destination);
+    click3.start(t3);
+    click3.stop(t3 + 0.18);
+  } catch(e) {}
+}
+
+function updateHUD() {
+  document.getElementById('score-value').textContent = score;
+  document.getElementById('ammo-value').textContent = `${ammo} / ${reserveAmmo}`;
+  document.getElementById('health-value').textContent = Math.round(Math.max(0, player.health));
+  document.getElementById('health-fill').style.width = Math.max(0, player.health) + '%';
+  // في الوضع الجماعي، حدّث صحة اللاعب والرصاص
+  if (gameMode === 'team') {
+    updatePlayerHealthDisplay();
+    updatePlayerAmmoDisplay();
+  }
+}
+
+// === تحديث عرض صحة اللاعب (الوضع الجماعي) ===
+function updatePlayerHealthDisplay() {
+  const hp = Math.max(0, Math.round(player.health));
+  document.getElementById('player-health-bar-fill').style.width = hp + '%';
+  document.getElementById('player-health-text').textContent = hp;
+}
+
+// === تحديث عرض الرصاص (الوضع الجماعي) ===
+function updatePlayerAmmoDisplay() {
+  const el = document.getElementById('player-ammo-text');
+  el.innerHTML = ammo + ' <span class="small">/ ' + reserveAmmo + '</span>';
+}
+
+// === تحديث اللاعب ===
+function updatePlayer(dt) {
+  // النظر
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  if (!gameRunning) {
+    const t = clock.getElapsedTime();
+    weaponGroup.position.y = -0.26 + Math.sin(t * 2) * 0.004;
+    weaponGroup.position.x = 0.28;
+    return;
+  }
+
+  // إذا كان اللاعب ميتاً (في فترة الريسباون)، جمّد حركته
+  if (player.userData && player.userData.isDead) {
+    // إبقاء الكاميرا في موضع مخفي (تحت الأرض) - لا حركة
+    camera.position.set(0, -50, 0);
+    return;
+  }
+
+  // الحركة
+  const moveSpeed = 11.0;  // مضاعفين (كان 5.5) - سرعة أعلى بكثير
+  let strafe = joystickVector.x;
+  let forward = joystickVector.y;
+
+  const mag = Math.sqrt(strafe*strafe + forward*forward);
+  if (mag > 1) {
+    strafe /= mag;
+    forward /= mag;
+  }
+
+  const sin = Math.sin(yaw);
+  const cos = Math.cos(yaw);
+  const moveX = (strafe * cos) - (forward * sin);
+  const moveZ = (-strafe * sin) - (forward * cos);
+
+  const newX = player.position.x + moveX * moveSpeed * dt;
+  const newZ = player.position.z + moveZ * moveSpeed * dt;
+
+  // === كشف التصادم قبل التحديث ===
+  // فحص المحور X فقط
+  if (!checkCollision(newX, player.position.z, 0.4)) {
+    player.position.x = newX;
+  }
+  // فحص المحور Z فقط
+  if (!checkCollision(player.position.x, newZ, 0.4)) {
+    player.position.z = newZ;
+  }
+
+  // الحدود
+  player.position.x = Math.max(-48, Math.min(48, player.position.x));
+  player.position.z = Math.max(-48, Math.min(48, player.position.z));
+
+  // الجاذبية
+  player.velocity.y -= 16 * dt;
+
+  let newY = player.position.y + player.velocity.y * dt;
+
+  // === فحص الوقوف على منصة ===
+  // أقدام اللاعب = موضع الكاميرا - 1.7
+  const newFeetY = newY - 1.7;
+  const prevFeetY = player.position.y - 1.7;
+  const platformY = checkPlatformSupport(player.position.x, player.position.z, newFeetY, prevFeetY);
+
+  // أرضية افتراضية
+  let groundLevel = 1.7;
+
+  // إن كان على منصة، تكون الأرضية في ارتفاع المنصة
+  if (platformY !== null) {
+    groundLevel = platformY + 1.7;
+  }
+
+  if (newY <= groundLevel) {
+    newY = groundLevel;
+    player.velocity.y = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+  player.position.y = newY;
+
+  camera.position.copy(player.position);
+
+  // === أنيميشن السلاح ===
+  const t = clock.getElapsedTime();
+
+  if (reloadAnimActive) {
+    // === أنيميشن احترافي لإعادة التلقيم ===
+    reloadAnimT = Math.min(reloadAnimT + dt * 0.9, 1);
+
+    // 3 مراحل: 0-0.3: يميل السلاح وينزل المخزن
+    //          0.3-0.7: المخزن الجديد يدخل
+    //          0.7-1.0: السلاح يعود + مقبض الشحن يُسحب
+    let magY, magRot, weaponRotZ, weaponRotX, weaponPosY, chargingZ;
+
+    if (reloadAnimT < 0.3) {
+      // مرحلة 1: إمالة السلاح وإسقاط المخزن
+      const p = reloadAnimT / 0.3;
+      const eased = 1 - Math.pow(1 - p, 3);  // ease-out
+      weaponRotZ = -eased * 0.4;
+      weaponRotX = eased * 0.2;
+      weaponPosY = -eased * 0.15;
+      magY = -eased * 0.35;    // المخزن ينزل
+      magRot = 0;
+      chargingZ = 0;
+    } else if (reloadAnimT < 0.7) {
+      // مرحلة 2: المخزن الجديد يدخل من الأسفل
+      const p = (reloadAnimT - 0.3) / 0.4;
+      const eased = 1 - Math.pow(1 - p, 3);
+      weaponRotZ = -0.4;
+      weaponRotX = 0.2;
+      weaponPosY = -0.15;
+      magY = -0.35 + eased * 0.35;    // المخزن يصعد للأعلى
+      magRot = 0;
+      chargingZ = 0;
+    } else {
+      // مرحلة 3: السلاح يعود + مقبض الشحن يُسحب
+      const p = (reloadAnimT - 0.7) / 0.3;
+      const eased = 1 - Math.pow(1 - p, 3);
+      weaponRotZ = -0.4 * (1 - eased);
+      weaponRotX = 0.2 * (1 - eased);
+      weaponPosY = -0.15 * (1 - eased);
+      magY = 0;
+      magRot = 0;
+      // مقبض الشحن يُسحب للخلف ثم يعود
+      if (p < 0.5) {
+        chargingZ = (p * 2) * 0.15;     // يسحب للخلف
+      } else {
+        chargingZ = (1 - (p - 0.5) * 2) * 0.15;  // يعود للأمام
+      }
+    }
+
+    weaponGroup.rotation.z = weaponRotZ;
+    weaponGroup.rotation.x = weaponRotX;
+    weaponGroup.position.y = -0.26 + weaponPosY;
+    weaponGroup.position.x = 0.28;
+
+    if (weaponParts.magazine) {
+      // المخزن: الموضع الأساسي y=-0.14, rotation.x=0.1
+      weaponParts.magazine.position.y = -0.14 + magY;
+      weaponParts.magazine.rotation.x = 0.1 + magRot;
+    }
+    if (weaponParts.chargingHandle) {
+      weaponParts.chargingHandle.position.z = 0.12 + chargingZ;
+    }
+  } else {
+    // اهتزاز السلاح أثناء المشي
+    const moving = Math.abs(strafe) + Math.abs(forward) > 0.1;
+    if (moving && player.onGround) {
+      weaponGroup.position.y = -0.26 + Math.sin(t * 10) * 0.012;
+      weaponGroup.position.x = 0.28 + Math.cos(t * 5) * 0.006;
+    } else {
+      weaponGroup.position.y = -0.26 + Math.sin(t * 2) * 0.004;
+      weaponGroup.position.x = 0.28;
+    }
+    weaponGroup.rotation.z = 0;
+    weaponGroup.rotation.x = 0;
+    // إعادة المخزن ومقبض الشحن لموضعهما
+    if (weaponParts.magazine) {
+      weaponParts.magazine.position.y = -0.14;
+      weaponParts.magazine.rotation.x = 0.1;
+    }
+    if (weaponParts.chargingHandle) {
+      weaponParts.chargingHandle.position.z = 0.12;
+    }
+  }
+
+  // إطفاء وميض الفوهة
+  if (muzzleFlashTimer > 0) {
+    muzzleFlashTimer -= dt;
+    if (muzzleFlashTimer <= 0) {
+      muzzleFlashMesh.material.opacity = 0;
+      muzzleFlashLight.intensity = 0;
+    }
+  }
+
+  // الإطلاق المستمر
+  if (isFiring) shoot();
+}
+
+function updateEnemies(dt) {
+  if (!gameRunning) return;
+
+  enemies.forEach(enemy => {
+    const dx = player.position.x - enemy.position.x;
+    const dz = player.position.z - enemy.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+
+    if (dist > 1.6) {
+      // حركة العدو مع فحص التصادم (لا يخترق المباني)
+      const moveX = (dx / dist) * enemy.userData.speed * dt;
+      const moveZ = (dz / dist) * enemy.userData.speed * dt;
+      if (!checkCollision(enemy.position.x + moveX, enemy.position.z, 0.4)) {
+        enemy.position.x += moveX;
+      }
+      if (!checkCollision(enemy.position.x, enemy.position.z + moveZ, 0.4)) {
+        enemy.position.z += moveZ;
+      }
+      enemy.userData.walkT += dt * 6;
+      const swing = Math.sin(enemy.userData.walkT) * 0.5;
+      if (enemy.userData.legL) enemy.userData.legL.rotation.x = swing;
+      if (enemy.userData.legR) enemy.userData.legR.rotation.x = -swing;
+    } else {
+      const now = performance.now();
+      if (now - enemy.userData.lastAttack > 900) {
+        enemy.userData.lastAttack = now;
+        player.health -= 9;
+        updateHUD();
+        const flash = document.getElementById('damage-flash');
+        flash.classList.add('show');
+        setTimeout(() => flash.classList.remove('show'), 300);
+
+        if (player.health <= 0) {
+          gameOver();
+        }
+      }
+    }
+
+    enemy.rotation.y = Math.atan2(dx, dz);
+  });
+}
+
+function gameOver() {
+  gameRunning = false;
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('game-over').classList.add('show');
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+}
+
+function animate() {
+  animFrameId = requestAnimationFrame(animate);
+  // cap مناسب للسلاسة (0.1 = 10 إطارات/ث كحد أدنى للحركة السلسة)
+  const dt = Math.min(clock.getDelta(), 0.08);
+
+  updatePlayer(dt);
+  // في الوضع الجماعي استخدم ذكاء البوتات للفريقين، وإلا استخدم منطق الأعداء العادي
+  if (gameMode === 'team') {
+    updateTeamBots(dt);
+    // في الوضع أونلاين، مزامنة حالة اللاعب المحلي مع اللاعبين الآخرين
+    if (isOnlineMode) syncLocalState();
+  } else {
+    updateEnemies(dt);
+  }
+
+  // السماء تتبع اللاعب
+  if (skyMesh) {
+    skyMesh.position.x = player.position.x;
+    skyMesh.position.z = player.position.z;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// الانطلاق
+window.addEventListener('load', () => {
+  if (typeof THREE === 'undefined') {
+    document.getElementById('start-screen').innerHTML = '<h1 style="color:#ff5050">خطأ في تحميل المكتبة</h1><p>تعذر تحميل مكتبة Three.js. تحقق من اتصال الإنترنت.</p>';
+    return;
+  }
+  try {
+    init();
+    updateHUD();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('start-screen').innerHTML = '<h1 style="color:#ff5050">خطأ</h1><p style="color:#fff">' + err.message + '</p>';
+  }
+});
+</script>
+</body>
+</html>
